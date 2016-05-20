@@ -16,7 +16,8 @@ module tracer
     integer,  parameter :: prec = sp 
 
     type tracer_par_class 
-        integer :: npts, npts_max 
+        integer :: n, n_active
+
     end type 
 
     type tracer_state_class 
@@ -32,14 +33,54 @@ module tracer
 
     end type 
 
+    private 
+    public :: tracer_class 
+    public :: tracer_init 
+    public :: tracer_update 
 
 contains 
+
+    subroutine tracer_init(par,now)
+
+        implicit none 
+
+        type(tracer_par_class),   intent(OUT) :: par 
+        type(tracer_state_class), intent(OUT) :: now 
+
+        ! Load the parameters
+        call tracer_par_load(par)
+
+        ! Allocate the state variables 
+        call tracer_allocate(now,n=par%n)
+
+
+        return 
+
+    end subroutine tracer_init
+
+
+    subroutine tracer_update(par,now,time)
+
+        implicit none 
+
+        type(tracer_par_class), intent(IN)      :: par 
+        type(tracer_state_class), intent(INOUT) :: now 
+        real(prec), intent(IN) :: time 
+
+        
+        return 
+
+    end subroutine tracer_update
+
 
     subroutine tracer_par_load(par)
 
         implicit none 
 
-        type(tracer_par_class) :: par 
+        type(tracer_par_class), intent(OUT) :: par 
+
+        par%n        = 1000
+        par%n_active = 0 
 
 
 
@@ -51,8 +92,8 @@ contains
 
         implicit none 
 
-        type(tracer_state_class) :: now 
-        integer :: n
+        type(tracer_state_class), intent(INOUT) :: now 
+        integer, intent(IN) :: n
 
         ! Make object is deallocated
         call tracer_deallocate(now)
@@ -70,7 +111,7 @@ contains
 
         implicit none 
 
-        type(tracer_state_class) :: now 
+        type(tracer_state_class), intent(INOUT) :: now 
 
         ! Allocate state objects
         if (allocated(now%is_active)) deallocate(now%is_active)
