@@ -73,6 +73,34 @@ contains
     end subroutine tracer_update
 
 
+    ! ================================================
+    !
+    ! tracer physics 
+    !
+    ! ================================================
+    
+    elemental subroutine calc_position(x,y,z,u,v,w,dt)
+
+        implicit none 
+
+        real(prec), intent(INOUT) :: x, y, z 
+        real(prec), intent(IN)    :: u, v, w 
+        real(prec), intent(IN)    :: dt 
+
+        x = x + u*dt 
+        y = y + v*dt 
+        z = z + w*dt 
+
+        return 
+
+    end subroutine calc_position
+
+    ! ================================================
+    !
+    ! Initialization routines 
+    !
+    ! ================================================
+
     subroutine tracer_par_load(par)
 
         implicit none 
