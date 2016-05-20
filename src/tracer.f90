@@ -17,7 +17,7 @@ module tracer
 
     type tracer_par_class 
         integer :: n, n_active
-
+        real(prec) :: time_now, time_old, dt  
     end type 
 
     type tracer_state_class 
@@ -70,11 +70,38 @@ contains
 
         implicit none 
 
-        type(tracer_par_class), intent(IN)      :: par 
+        type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
         real(prec), intent(IN) :: time 
 
+        ! Update current time 
+        par%time_old = par%time_now 
+        par%time_now = time 
+        par%dt       = par%time_now - par%time_old 
+
+        ! Deposit new tracer points
+
+        ! == TO DO == 
+        ! - Function based on H and U for location, input frequency 
+        ! - Attach whatever information we want to trace (age, climate, isotopes, etc)
         
+        ! Interpolate velocities to active point locations 
+
+        ! == TO DO == 
+
+        ! Update the tracer thickness, then destroy points that are too thin 
+
+        ! == TO DO == 
+
+        ! Update the tracer positions 
+        call calc_position(now%x,now%y,now%z,now%u,now%v,now%w,par%dt,now%is_active)
+
+        ! Destroy points that moved outside the valid region 
+
+        ! == TO DO == 
+
+
+
         return 
 
     end subroutine tracer_update
@@ -86,17 +113,20 @@ contains
     !
     ! ================================================
     
-    elemental subroutine calc_position(x,y,z,u,v,w,dt)
+    elemental subroutine calc_position(x,y,z,u,v,w,dt,is_active)
 
         implicit none 
 
         real(prec), intent(INOUT) :: x, y, z 
         real(prec), intent(IN)    :: u, v, w 
         real(prec), intent(IN)    :: dt 
+        logical,    intent(IN)    :: is_active 
 
-        x = x + u*dt 
-        y = y + v*dt 
-        z = z + w*dt 
+        if (is_active) then 
+            x = x + u*dt 
+            y = y + v*dt 
+            z = z + w*dt 
+        end if 
 
         return 
 
@@ -117,7 +147,9 @@ contains
         par%n        = 1000
         par%n_active = 0 
 
-
+        par%time_now = 0.0 
+        par%time_old = 0.0 
+        par%dt       = 0.0 
 
         return 
 
