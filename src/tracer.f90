@@ -53,7 +53,14 @@ contains
         ! Allocate the state variables 
         call tracer_allocate(now,n=par%n)
 
-
+        ! Initialize state 
+        now%x = 0.0 
+        now%y = 0.0 
+        now%z = 0.0 
+        now%u = 0.0 
+        now%v = 0.0 
+        now%w = 0.0 
+        
         return 
 
     end subroutine tracer_init
