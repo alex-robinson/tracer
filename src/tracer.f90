@@ -24,7 +24,8 @@ module tracer
         logical, allocatable :: is_active(:) 
         real(prec), allocatable :: x(:), y(:), z(:)
         real(prec), allocatable :: u(:), v(:), w(:)
-        
+        real(prec), allocatable :: time_dep(:) 
+
     end type 
 
     type tracer_class 
@@ -54,26 +55,30 @@ contains
         call tracer_allocate(now,n=par%n)
 
         ! Initialize state 
-        now%x = 0.0 
-        now%y = 0.0 
-        now%z = 0.0 
-        now%u = 0.0 
-        now%v = 0.0 
-        now%w = 0.0 
-        
+        now%is_active = .FALSE. 
+
+        now%x         = 0.0 
+        now%y         = 0.0 
+        now%z         = 0.0 
+        now%u         = 0.0 
+        now%v         = 0.0 
+        now%w         = 0.0 
+        now%time_dep  = 0.0 
+
         return 
 
     end subroutine tracer_init
 
-
-    subroutine tracer_update(par,now,time)
+    subroutine tracer_update(par,now,time,x0,y0,z0,u0,v0,w0)
 
         implicit none 
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
         real(prec), intent(IN) :: time 
-
+        real(prec), intent(IN) :: x0(:,:,:), y0(:,:,:), z0(:,:,:)
+        real(prec), intent(IN) :: u0(:,:,:), v0(:,:,:), w0(:,:,:)
+        
         ! Update current time 
         par%time_old = par%time_now 
         par%time_now = time 
@@ -82,9 +87,9 @@ contains
         ! Deposit new tracer points
 
         ! == TO DO == 
-        ! - Function based on H and U for location, input frequency 
+        ! - Function based on H and U for location, input par deposition frequency 
         ! - Attach whatever information we want to trace (age, climate, isotopes, etc)
-        
+
         ! Interpolate velocities to active point locations 
 
         ! == TO DO == 
@@ -106,6 +111,29 @@ contains
 
     end subroutine tracer_update
 
+    ! ================================================
+    !
+    ! tracer management 
+    !
+    ! ================================================
+    
+    subroutine tracer_activate()
+        ! Use this to activate individual or multiple tracers
+        implicit none 
+
+
+        return 
+
+    end subroutine tracer_activate 
+
+    subroutine tracer_deactivate()
+        ! Use this to deactivate individual or multiple tracers
+        implicit none 
+
+
+        return 
+
+    end subroutine tracer_deactivate 
 
     ! ================================================
     !
@@ -170,6 +198,9 @@ contains
         allocate(now%x(n),now%y(n),now%z(n))
         allocate(now%u(n),now%v(n),now%w(n))
 
+        ! Allocate tracer properties 
+        allocate(now%time_dep(n))
+
         return
 
     end subroutine tracer_allocate
@@ -188,6 +219,8 @@ contains
         if (allocated(now%u))         deallocate(now%u)
         if (allocated(now%v))         deallocate(now%v)
         if (allocated(now%w))         deallocate(now%w)
+
+        if (allocated(now%time_dep))  deallocate(now%time_dep)
 
         return
 
