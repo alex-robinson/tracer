@@ -6,6 +6,11 @@ program tracertest
     
     implicit none 
 
+    type(tracer_class) :: trc1
+
+    
+
+    call tracer_init(trc1)
 
 
 

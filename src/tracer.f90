@@ -56,6 +56,7 @@ module tracer
     public :: tracer_class 
     public :: tracer_init 
     public :: tracer_update 
+    public :: tracer_end 
 
 contains 
 
@@ -129,6 +130,21 @@ contains
         return 
 
     end subroutine tracer_update
+
+    subroutine tracer_end(trc)
+
+        implicit none 
+
+        type(tracer_class),   intent(OUT) :: trc 
+        
+        ! Allocate the state variables 
+        call tracer_deallocate(trc%now,trc%dep)
+
+        write(*,*) "tracer:: tracer object deallocated."
+        
+        return 
+
+    end subroutine tracer_end
 
     ! ================================================
     !
