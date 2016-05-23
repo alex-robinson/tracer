@@ -108,11 +108,19 @@ $(objdir)/nml.o: $(libdir)/nml.f90
 $(objdir)/ncio.o: $(libdir)/ncio.f90
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
-$(objdir)/tracer.o: $(srcdir)/tracer.f90 $(objdir)/nml.o $(objdir)/ncio.o
+$(objdir)/tracer_precision.o: $(srcdir)/tracer_precision.f90
+	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
+
+$(objdir)/tracer_interp.o: $(srcdir)/tracer_interp.f90 $(objdir)/tracer_precision.o
+	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
+
+$(objdir)/tracer.o: $(srcdir)/tracer.f90 $(objdir)/tracer_precision.o $(objdir)/nml.o $(objdir)/ncio.o
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
 obj_tracer =    $(objdir)/nml.o    \
 				$(objdir)/ncio.o   \
+				$(objdir)/tracer_precision.o \
+				$(objdir)/tracer_interp.o \
 				$(objdir)/tracer.o
 				   
 ## Complete programs
