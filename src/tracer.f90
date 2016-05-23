@@ -27,6 +27,7 @@ module tracer
         real(prec), allocatable :: x(:), y(:), z(:)
         real(prec), allocatable :: u(:), v(:), w(:)
         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
+        real(prec), allocatable :: T(:)              ! Current temperature of the tracer (for borehole comparison, internal melting...)
     end type 
 
     type tracer_dep_class 
@@ -82,6 +83,7 @@ contains
         trc%now%v         = 0.0 
         trc%now%w         = 0.0 
         trc%now%thk       = 0.0 
+        trc%now%T         = 260.0 
 
         return 
 
@@ -238,6 +240,7 @@ contains
         allocate(now%x(n),now%y(n),now%z(n))
         allocate(now%u(n),now%v(n),now%w(n))
         allocate(now%thk(n))
+        allocate(now%T(n))
 
         ! Allocate deposition properties 
         allocate(dep%time(n), dep%elev(n))
@@ -264,6 +267,7 @@ contains
         if (allocated(now%v))         deallocate(now%v)
         if (allocated(now%w))         deallocate(now%w)
         if (allocated(now%thk))       deallocate(now%thk)
+        if (allocated(now%T))         deallocate(now%T)
 
         ! Deallocate deposition objects
         if (allocated(dep%time))      deallocate(dep%time)
