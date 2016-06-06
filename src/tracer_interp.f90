@@ -11,12 +11,11 @@ module tracer_interp
         real(prec) :: alpha1, alpha2 
     end type 
 
-    real(prec) :: missing_value = MISSING_VALUE_DEFAULT 
-    real(prec) :: mv = MISSING_VALUE_DEFAULT 
-
     private
-    public :: interp_bilinear_weights 
 
+    public :: bilin_par_type
+    public :: interp_bilinear_weights 
+    public :: interp_bilinear 
 
 contains 
 
@@ -113,7 +112,7 @@ contains
             p1 = z(par%i-1,par%j)   + par%alpha1*(z(par%i,par%j)-z(par%i-1,par%j))
             zout = p0 + par%alpha2*(p1-p0)
         else 
-            zout = missing_value 
+            zout = MV 
         end if 
 
         return 

@@ -4,11 +4,17 @@ module tracer_precision
 
     integer,  parameter :: dp  = kind(1.d0)
     integer,  parameter :: sp  = kind(1.0)
-    real(dp), parameter :: ERR_DIST = 1E8_dp 
-    integer,  parameter :: ERR_IND  = -1 
-    real(dp), parameter :: MISSING_VALUE_DEFAULT = -9999.0_dp 
-
+    
     ! Precision used here
     integer,  parameter :: prec = sp 
 
+    ! Missing value aliases 
+    real(prec), parameter :: MISSING_VALUE_DEFAULT = -9999.0_dp 
+    real(prec), parameter :: MV     = MISSING_VALUE_DEFAULT
+    real(prec), parameter :: MV_INT = int(MISSING_VALUE_DEFAULT)
+
+    ! Error values
+    real(prec), parameter :: ERR_DIST = 1E8_dp 
+    integer,  parameter   :: ERR_IND  = -1 
+    
 end module tracer_precision 

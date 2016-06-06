@@ -2,6 +2,7 @@
 module tracer 
 
     use tracer_precision
+    use tracer_interp 
     use ncio   
     use nml 
 
@@ -46,11 +47,14 @@ module tracer
         type(tracer_dep_class)   :: dep 
     end type 
 
+    type(bilin_par_type) :: par_bilin 
+
     private 
     public :: tracer_class 
     public :: tracer_init 
     public :: tracer_update 
     public :: tracer_end 
+    public :: tracer_write_init, tracer_write 
 
 contains 
 
@@ -69,30 +73,38 @@ contains
         ! Initialize state 
         trc%now%is_active = .FALSE. 
 
-        trc%now%x         = 0.0 
-        trc%now%y         = 0.0 
-        trc%now%z         = 0.0 
-        trc%now%u         = 0.0 
-        trc%now%v         = 0.0 
-        trc%now%w         = 0.0 
-        trc%now%thk       = 0.0 
-        trc%now%T         = 260.0 
+        trc%now%x         = mv 
+        trc%now%y         = mv 
+        trc%now%z         = mv 
+        trc%now%u         = mv 
+        trc%now%v         = mv 
+        trc%now%w         = mv 
+        trc%now%thk       = mv 
+        trc%now%T         = mv 
+
+        ! Initialize random number generator 
+        call random_seed() 
 
         return 
 
     end subroutine tracer_init
 
-    subroutine tracer_update(par,now,dep,time,x0,y0,z0,u0,v0,w0)
+    subroutine tracer_update(par,now,dep,time,x,y,z,z_srf,H) !,u,v,w)
 
         implicit none 
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
         type(tracer_dep_class),   intent(INOUT) :: dep
-            real(prec), intent(IN) :: time 
-        real(prec), intent(IN) :: x0(:,:,:), y0(:,:,:), z0(:,:,:)
-        real(prec), intent(IN) :: u0(:,:,:), v0(:,:,:), w0(:,:,:)
+        real(prec), intent(IN) :: time 
+        real(prec), intent(IN) :: x(:), y(:), z(:)
+        real(prec), intent(IN) :: z_srf(:,:), H(:,:)
+!         real(prec), intent(IN) :: u(:,:,:), v(:,:,:), w(:,:,:)
         
+        ! Local variables 
+        real(prec) :: xlim(2), ylim(2) 
+        integer :: i 
+
         ! Update current time 
         par%time_old = par%time_now 
         par%time_now = time 
@@ -114,6 +126,21 @@ contains
         ! == TO DO == 
 
         ! Finally, deposit new tracer points
+        xlim = [minval(x),maxval(x)]
+        ylim = [minval(y),maxval(y)]
+        
+        call tracer_activate(par,now,xlim,ylim,H=H,nmax=20,method="random")
+
+        ! Interpolate to the get the right elevation and other deposition quantities
+        do i = 1, par%n 
+            if (now%is_active(i)) then 
+                par_bilin = interp_bilinear_weights(x,y,xout=now%x(i),yout=now%y(i))
+
+                now%z(i) = interp_bilinear(par_bilin,z_srf)
+
+            end if 
+        end do 
+
 
         ! == TO DO == 
         ! - Generate position based on a random algorithm plus weighting
@@ -147,9 +174,48 @@ contains
     !
     ! ================================================
     
-    subroutine tracer_activate()
-        ! Use this to activate individual or multiple tracers
+    subroutine tracer_activate(par,now,xlim,ylim,H,nmax,method)
+        ! Use this to activate individual or multiple tracers (not more than nmax)
+        ! Only determine x/y position here, later interpolate z_srf and deposition
+        ! information 
+
         implicit none 
+
+        type(tracer_par_class),   intent(INOUT) :: par 
+        type(tracer_state_class), intent(INOUT) :: now 
+        real(prec), intent(IN) :: xlim(2), ylim(2) 
+        real(prec), intent(IN) :: H(:,:)
+        integer, intent(IN) :: nmax 
+        character(len=*), intent(IN) :: method 
+
+        integer :: i, k 
+        real(prec) :: tmp(2) 
+
+        k = 0 
+
+        if (trim(method) .eq. "random") then 
+
+            do i = 1, par%n 
+
+                if (.not. now%is_active(i)) then 
+
+                    call random_number(tmp)
+
+                    now%x(i) = tmp(1)*(xlim(2)-xlim(1)) + xlim(1)
+                    now%y(i) = tmp(2)*(ylim(2)-ylim(1)) + ylim(1)
+                    
+                    ! Mark this point as active
+                    now%is_active(i) = .TRUE. 
+                    k = k+1 
+
+                end if 
+
+                ! Only activate the number of desired points
+                if (k .ge. nmax) exit 
+
+            end do 
+
+        end if 
 
 
         return 
@@ -276,6 +342,106 @@ contains
         return
 
     end subroutine tracer_deallocate
+
+    ! ================================================
+    !
+    ! I/O routines 
+    !
+    ! ================================================
+
+    subroutine tracer_write_init(trc,fldr,filename)
+
+        implicit none 
+
+        type(tracer_class), intent(IN) :: trc 
+        character(len=*), intent(IN)   :: fldr, filename 
+
+        ! Local variables 
+        integer :: nt 
+        character(len=512) :: path_out 
+
+        path_out = trim(fldr)//"/"//trim(filename)
+
+!         type tracer_state_class 
+!         logical, allocatable :: is_active(:) 
+!         real(prec), allocatable :: x(:), y(:), z(:)
+!         real(prec), allocatable :: u(:), v(:), w(:)
+!         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
+!         real(prec), allocatable :: T(:)              ! Current temperature of the tracer (for borehole comparison, internal melting...)
+!         end type 
+
+        ! Create output file 
+        call nc_create(path_out)
+        call nc_write_dim(path_out,"pt",x=1,dx=1,nx=trc%par%n)
+        call nc_write_dim(path_out,"time",x=mv,unlimited=.TRUE.)
+
+        return 
+
+    end subroutine tracer_write_init 
+
+    subroutine tracer_write(trc,time,fldr,filename)
+
+        implicit none 
+
+        type(tracer_class), intent(IN) :: trc 
+        real(prec) :: time 
+        character(len=*), intent(IN)   :: fldr, filename 
+
+        ! Local variables 
+        integer :: nt
+        integer, allocatable :: dims(:)
+        real(prec) :: time_in  
+        character(len=512) :: path_out 
+
+        path_out = trim(fldr)//"/"//trim(filename)
+
+!         type tracer_state_class 
+!         logical, allocatable :: is_active(:) 
+!         real(prec), allocatable :: x(:), y(:), z(:)
+!         real(prec), allocatable :: u(:), v(:), w(:)
+!         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
+!         real(prec), allocatable :: T(:)              ! Current temperature of the tracer (for borehole comparison, internal melting...)
+!         end type 
+        
+        ! Determine which timestep this is
+        call nc_dims(path_out,"time",dims=dims)
+        nt = dims(1)
+        call nc_read(path_out,"time",time_in,start=[nt],count=[1])
+        if (time_in .ne. MV .and. time .gt. time_in) nt = nt+1 
+        
+        call nc_write(path_out,"time",time,dim1="time",start=[nt],count=[1],missing_value=MV)
+        call nc_write(path_out,"x",trc%now%x,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"y",trc%now%y,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"z",trc%now%z,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"u",trc%now%u,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"v",trc%now%v,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"w",trc%now%w,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"thk",trc%now%thk,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"T",trc%now%T,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+
+
+        return 
+
+    end subroutine tracer_write 
+
+    subroutine tracer_read()
+
+        implicit none 
+
+
+
+        return 
+
+    end subroutine tracer_read
+
 
 end module tracer 
 
