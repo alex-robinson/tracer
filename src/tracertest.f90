@@ -3,62 +3,77 @@ program tracertest
 
     use ncio 
     use tracer 
-    use coordinates 
 
     implicit none 
 
     type(tracer_class) :: trc1
-    type(grid_class)   :: grid 
     character(len=128) :: file0, fldr, filename 
 
-    integer :: nz 
-    real(4), allocatable :: zs(:,:), H(:,:), u(:,:,:), v(:,:,:), w(:,:,:)
+    integer :: nx, ny, nz
+    integer, allocatable :: dims(:) 
+    real(4), allocatable :: sigma(:), xc(:), yc(:)
+    real(4), allocatable :: zs(:,:), zb(:,:), H(:,:), ux(:,:,:), uy(:,:,:), uz(:,:,:)
 
-    integer :: k, kmax 
-    real(4) :: time 
+    integer :: k, kmax, q 
+    real(4) :: time, time_end, dt  
 
-    ! Initialize a grid for the tracer domain
-    call grid_init(grid,name="GRL-20KM",mtype="stereographic",units="kilometers", &
-                   lon180=.TRUE.,dx=20.d0,nx=90,dy=20.d0,ny=150, &
-                   lambda=-40.d0,phi=72.d0,alpha=8.4d0)
+    file0 = "data/trace1_relax/Grisli15_3D.nc"
+    call nc_dims(file0,"Ux",dims=dims)
+    nx = dims(1)
+    ny = dims(2)
+    nz = dims(3)
 
+    allocate(xc(nx))
+    allocate(yc(ny))
+    allocate(sigma(nz))
+    allocate(zs(nx,ny))
+    allocate(zb(nx,ny))
+    allocate(H(nx,ny))
+    
+    allocate(ux(nx,ny,nz))
+    allocate(uy(nx,ny,nz))
+    allocate(uz(nx,ny,nz))
 
-    ! Generate boundary variables 
-    call grid_allocate(grid,zs)
-    call grid_allocate(grid,H)
+    call nc_read(file0,"xc",xc)
+    call nc_read(file0,"yc",yc)
+    call nc_read(file0,"sigma",sigma)
 
-    nz = 10 
-    allocate(u(size(H,1),size(H,2),nz))
-    allocate(v(size(H,1),size(H,2),nz))
-    allocate(w(size(H,1),size(H,2),nz))
-
-    ! Load topography data 
-    file0 = "data/"//trim(grid%name)//"_TOPO-B13_gl0.05.nc"
-    call nc_read(file0,"zs",zs)
+    call nc_read(file0,"z_srf",zs)
+    call nc_read(file0,"z_bed",zb)
     call nc_read(file0,"H",H)
 
+    call nc_read(file0,"Ux",ux)
+    call nc_read(file0,"Uy",uy)
+    call nc_read(file0,"Uz",uz)
 
+    fldr     = "output"
+    filename = "GRL-20KM_trc1.nc"
 
-    fldr = "output"
-    filename = trim(grid%name)//"_trc1.nc"
+    ! Test tracer_update
+    time     = 0.0 
+    time_end = 1000.0
+    dt       = 1.0 
 
     ! Initialize tracer and output file 
-    call tracer_init(trc1)
+    call tracer_init(trc1,time=time)
     call tracer_write_init(trc1,fldr,filename)
 
-    
-    ! Test tracer_update
-    time = 0.0 
-    kmax = 100
-    do k = 1, kmax 
+    q = 0 
 
-        time = time + real(k)
+    do k = 1, int(time_end/dt), int(dt) 
 
-        call tracer_update(trc1%par,trc1%now,trc1%dep,time=0.0, &
-                            x=real(grid%G%x),y=real(grid%G%y),z=real(grid%G%x*0.0), &
-                            z_srf=real(zs),H=real(H))
+        if (k .gt. 1) time = time + dt 
+        write(*,*) "time = ", time 
 
-        call tracer_write(trc1,time,fldr,filename)
+        call tracer_update(trc1%par,trc1%now,trc1%dep,time=time, &
+                            x=xc,y=yc,z=sigma,z_srf=zs,H=H,ux=ux,uy=uy,uz=uz)
+
+        q = q+1 
+        if (q==5) q = 0
+
+        if (q==0) then 
+            call tracer_write(trc1,time,fldr,filename)
+        end if 
 
     end do 
 
