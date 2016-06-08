@@ -7,7 +7,7 @@ program tracertest
     implicit none 
 
     type(tracer_class) :: trc1
-    character(len=128) :: file0, fldr, filename 
+    character(len=128) :: file0, fldr, filename, filename_stats 
 
     integer :: nx, ny, nz
     integer, allocatable :: dims(:) 
@@ -50,7 +50,8 @@ program tracertest
     call nc_read(file0,"Uz",uz)
 
     fldr     = "output"
-    filename = "GRL-20KM_trc1.nc"
+    filename       = "GRL-20KM_trc1.nc"
+    filename_stats = "GRL-20KM_trc1-stats.nc"
 
     ! Test tracer_update
     time     = 0.0 
@@ -58,7 +59,7 @@ program tracertest
     dt       = 1.0 
 
     ! Initialize tracer and output file 
-    call tracer_init(trc1,time=time)
+    call tracer_init(trc1,time=time,x=xc,y=yc,z=sigma)
     call tracer_write_init(trc1,fldr,filename)
 
     q = 9 
@@ -68,7 +69,7 @@ program tracertest
         if (k .gt. 1) time = time + dt 
         write(*,*) "time = ", time, trc1%par%n_active
 
-        call tracer_update(trc1%par,trc1%now,trc1%dep,time=time, &
+        call tracer_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
                             x=xc,y=yc,z=sigma,z_srf=zs,H=H,ux=ux,uy=uy,uz=uz)
 
         q = q+1 
@@ -78,6 +79,9 @@ program tracertest
         end if 
 
     end do 
+
+    ! Write stats 
+    call tracer_write_stats(trc1,time,fldr,filename_stats)
 
 contains 
 

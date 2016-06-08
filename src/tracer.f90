@@ -35,6 +35,12 @@ module tracer
 
     end type 
 
+    type tracer_stats_class
+        real(prec), allocatable :: x(:), y(:), z(:) 
+        integer,    allocatable :: density(:,:) 
+
+    end type
+
     type tracer_dep_class 
         ! Standard deposition information (time and place)
         integer,    allocatable :: id(:)
@@ -56,7 +62,9 @@ module tracer
     type tracer_class 
         type(tracer_par_class)   :: par 
         type(tracer_state_class) :: now 
-        type(tracer_dep_class)   :: dep 
+        type(tracer_dep_class)   :: dep
+        type(tracer_stats_class) :: stats 
+
     end type 
 
     type(bilin_par_type) :: par_bilin 
@@ -67,14 +75,16 @@ module tracer
     public :: tracer_update 
     public :: tracer_end 
     public :: tracer_write_init, tracer_write 
+    public :: tracer_write_stats 
 
 contains 
 
-    subroutine tracer_init(trc,time)
+    subroutine tracer_init(trc,time,x,y,z)
 
         implicit none 
 
         type(tracer_class),   intent(OUT) :: trc 
+        real(prec), intent(IN) :: x(:), y(:), z(:)
         real(4) :: time 
 
         ! Load the parameters
@@ -82,6 +92,7 @@ contains
 
         ! Allocate the state variables 
         call tracer_allocate(trc%now,trc%dep,n=trc%par%n)
+        call tracer_allocate_stats(trc%stats,x,y,z)
 
         ! Initialize state 
         trc%now%active    = 0 
@@ -109,13 +120,14 @@ contains
 
     end subroutine tracer_init
 
-    subroutine tracer_update(par,now,dep,time,x,y,z,z_srf,H,ux,uy,uz)
+    subroutine tracer_update(par,now,dep,stats,time,x,y,z,z_srf,H,ux,uy,uz)
 
         implicit none 
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
         type(tracer_dep_class),   intent(INOUT) :: dep
+        type(tracer_stats_class), intent(INOUT) :: stats
         real(prec), intent(IN) :: time 
         real(prec), intent(IN) :: x(:), y(:), z(:)
         real(prec), intent(IN) :: z_srf(:,:), H(:,:)
@@ -202,6 +214,9 @@ contains
 
         ! Update summary statistics 
         par%n_active = count(now%active.gt.0)
+
+        ! Calculate density 
+        stats%density = calc_tracer_density(par,now,x,y,z_srf)
 
         return 
 
@@ -542,6 +557,48 @@ contains
 
     end subroutine tracer_deallocate
 
+    subroutine tracer_allocate_stats(stats,x,y,z)
+
+        implicit none 
+
+        type(tracer_stats_class), intent(INOUT) :: stats 
+        real(prec), intent(IN) :: x(:), y(:), z(:)
+        
+        ! Make object is deallocated
+        call tracer_deallocate_stats(stats)
+
+        ! Allocate tracer stats axes
+        allocate(stats%x(size(x)))
+        allocate(stats%y(size(y)))
+        allocate(stats%z(size(z)))
+
+        ! Allocate tracer stats objects
+        allocate(stats%density(size(x),size(y)))
+
+        ! Also store axis information directly
+        stats%x = x 
+        stats%y = y 
+        stats%z = z 
+
+        return
+
+    end subroutine tracer_allocate_stats
+
+    subroutine tracer_deallocate_stats(stats)
+
+        implicit none 
+
+        type(tracer_stats_class), intent(INOUT) :: stats 
+
+        ! Deallocate stats objects
+        if (allocated(stats%density)) deallocate(stats%density)
+
+        return
+
+    end subroutine tracer_deallocate_stats
+
+    
+
     ! ================================================
     !
     ! I/O routines 
@@ -616,6 +673,35 @@ contains
         return 
 
     end subroutine tracer_write 
+
+    subroutine tracer_write_stats(trc,time,fldr,filename)
+
+        implicit none 
+
+        type(tracer_class), intent(IN) :: trc 
+        real(prec) :: time
+        character(len=*), intent(IN)   :: fldr, filename 
+
+        ! Local variables 
+        integer :: nt 
+        character(len=512) :: path_out 
+
+        path_out = trim(fldr)//"/"//trim(filename)
+
+        ! Create output file 
+        call nc_create(path_out)
+        call nc_write_dim(path_out,"xc",   x=trc%stats%x*1e-3)
+        call nc_write_dim(path_out,"yc",   x=trc%stats%y*1e-3)
+        call nc_write_dim(path_out,"sigma",x=trc%stats%z)
+        call nc_write_dim(path_out,"time",x=time,unlimited=.TRUE.)
+
+        call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",missing_value=int(MV), &
+                      units="1",long_name="Tracer density (surface)")
+
+
+        return 
+
+    end subroutine tracer_write_stats
 
     subroutine tracer_read()
 
