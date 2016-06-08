@@ -38,6 +38,9 @@ program tracertest
     call nc_read(file0,"yc",yc)
     call nc_read(file0,"sigma",sigma)
 
+    xc = xc*1e3 
+    yc = yc*1e3 
+
     call nc_read(file0,"z_srf",zs)
     call nc_read(file0,"z_bed",zb)
     call nc_read(file0,"H",H)
@@ -51,28 +54,27 @@ program tracertest
 
     ! Test tracer_update
     time     = 0.0 
-    time_end = 1000.0
+    time_end = 1002.0
     dt       = 1.0 
 
     ! Initialize tracer and output file 
     call tracer_init(trc1,time=time)
     call tracer_write_init(trc1,fldr,filename)
 
-    q = 0 
+    q = 9 
 
     do k = 1, int(time_end/dt), int(dt) 
 
         if (k .gt. 1) time = time + dt 
-        write(*,*) "time = ", time 
+        write(*,*) "time = ", time, trc1%par%n_active
 
         call tracer_update(trc1%par,trc1%now,trc1%dep,time=time, &
                             x=xc,y=yc,z=sigma,z_srf=zs,H=H,ux=ux,uy=uy,uz=uz)
 
         q = q+1 
-        if (q==5) q = 0
-
-        if (q==0) then 
+        if (q==10) then 
             call tracer_write(trc1,time,fldr,filename)
+            q = 0 
         end if 
 
     end do 

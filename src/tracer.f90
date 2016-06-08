@@ -197,6 +197,8 @@ contains
         ! - Attach whatever information we want to trace (age, deposition elevation and location, climate, isotopes, etc)
 
 
+        ! Update summary statistics 
+        par%n_active = count(now%active.gt.0)
 
         return 
 
@@ -239,7 +241,7 @@ contains
         integer :: ntot  
         real(prec) :: p(size(H,1),size(H,2))
         integer :: i, j, k, ij(2)
-        real(prec), allocatable :: tmp(:,:)
+        real(prec), allocatable :: jit(:,:), dens(:,:)
 
         ! How many points can be activated?
         ntot = min(nmax,count(now%active == 0))
@@ -248,13 +250,13 @@ contains
         p = gen_distribution(H,H_min=par%H_min_dep,ntot=ntot,alpha=par%alpha,dist=par%dist)
 
         ! Generate random numbers to populate points 
-        allocate(tmp(2,ntot))
-        call random_number(tmp)
-        tmp = (tmp - 0.5)
-        tmp(1,:) = tmp(1,:)*(x(2)-x(1)) 
-        tmp(2,:) = tmp(2,:)*(y(2)-y(1)) 
+        allocate(jit(2,ntot))
+        call random_number(jit)
+        jit = (jit - 0.5)
+        jit(1,:) = jit(1,:)*(x(2)-x(1)) 
+        jit(2,:) = jit(2,:)*(y(2)-y(1)) 
 
-!         write(*,*) "range tmp: ", minval(tmp), maxval(tmp)
+!         write(*,*) "range jit: ", minval(jit), maxval(jit)
 !         write(*,*) "npts: ", count(npts .gt. 0) 
 !         write(*,*) "ntot: ", ntot 
 !         stop 
@@ -271,8 +273,8 @@ contains
                     k = k + 1
                     par%id_max = par%id_max+1 
                     now%id(j)  = par%id_max 
-                    now%x(j) = x(ij(1)) + tmp(1,k)
-                    now%y(j) = y(ij(2)) + tmp(2,k)
+                    now%x(j) = x(ij(1)) + jit(1,k)
+                    now%y(j) = y(ij(2)) + jit(2,k)
                     
                     p(ij(1),ij(2)) = 0.0 
 
@@ -384,6 +386,24 @@ contains
         return 
 
     end function gen_distribution
+
+    function calc_tracer_density(now,x,y,z_srf) result(dens)
+
+        implicit none
+        
+        type(tracer_state_class), intent(IN) :: now
+        real(prec), intent(IN) :: x(:), y(:), z_srf(:,:)
+        real(prec) :: dens(size(x),size(y))
+        
+        
+        
+        
+        
+        
+        return
+
+    end function calc_tracer_density
+
 
 
     ! ================================================
@@ -535,9 +555,9 @@ contains
         if (time_in .ne. MV .and. abs(time-time_in).gt.1e-2) nt = nt+1 
 
         call nc_write(path_out,"time",time,dim1="time",start=[nt],count=[1],missing_value=MV)
-        call nc_write(path_out,"x",trc%now%x,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"x",trc%now%x*1e-3,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
-        call nc_write(path_out,"y",trc%now%y,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"y",trc%now%y*1e-3,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"z",trc%now%z,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
