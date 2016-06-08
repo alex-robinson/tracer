@@ -19,6 +19,9 @@ module tracer
         real(prec) :: H_min_dep                 ! Minimum ice thickness for tracer deposition (m)
         real(prec) :: alpha                     ! Slope of probability function
         character(len=56) :: dist               ! Distribution for generating prob. function
+        real(prec) :: dens_z_lim                ! Distance from surface to count density
+        integer    :: dens_max                  ! Max allowed density of particles at surface
+        
     end type 
 
     type tracer_state_class 
@@ -387,19 +390,51 @@ contains
 
     end function gen_distribution
 
-    function calc_tracer_density(now,x,y,z_srf) result(dens)
-
+    function calc_tracer_density(par,now,x,y,z_srf) result(dens)
+        ! Check tracer density near the surface
+        ! (to avoid depositing too many particles in the same place)
+        
         implicit none
         
+        type(tracer_par_class) :: par
         type(tracer_state_class), intent(IN) :: now
         real(prec), intent(IN) :: x(:), y(:), z_srf(:,:)
-        real(prec) :: dens(size(x),size(y))
+        integer :: dens(size(x),size(y))
         
+        integer :: i, j, k
+        integer :: nx, ny
         
+        nx = size(x)
+        ny = size(y)
         
+        ! Set initial density to zero everywhere
+        dens = 0
         
+        ! Loop over active points, count surface density 
+        ! at each grid point
+        do k = 1, par%n_active
+            
+            do i = 1, nx
+                if (x(i) .gt. now%x(k)) exit
+            end do
+            if ( (now%x(k)-x(i-1))/(x(i)-x(i-1)) .lt. 0.5 ) i = i-1
+            
+            do j = 1, ny
+                if (y(j) .gt. now%y(k)) exit
+            end do
+            if ( (now%y(k)-y(j-1))/(y(j)-y(j-1)) .lt. 0.5 ) j = j-1
+            
+            if (abs(z_srf(i,j)-now%z(k)) .lt. par%dens_z_lim) then
+                ! If point is near surface, add it to density
+               dens(i,j) = dens(i,j)+1
+            end if
+            
+            
+        end do
+          
         
-        
+                
+                
         return
 
     end function calc_tracer_density
@@ -434,6 +469,9 @@ contains
         par%H_min_dep = 2000.0 ! m 
         par%alpha     = 1.0 
         par%dist      = "linear"
+        
+        par%dens_z_lim = 50.0 ! m
+        par%dens_max   = 10   ! Number of points
 
         return 
 
