@@ -37,7 +37,7 @@ module tracer
 
     type tracer_stats_class
         real(prec), allocatable :: x(:), y(:), z(:) 
-        integer,    allocatable :: density(:,:) 
+        integer,    allocatable :: density(:,:,:)
 
     end type
 
@@ -216,7 +216,8 @@ contains
         par%n_active = count(now%active.gt.0)
 
         ! Calculate density 
-        stats%density = calc_tracer_density(par,now,x,y,z_srf)
+        stats%density = 0 
+        stats%density(:,:,1) = calc_tracer_density(par,now,x,y,z_srf)
 
         return 
 
@@ -574,7 +575,7 @@ contains
         allocate(stats%z(size(z)))
 
         ! Allocate tracer stats objects
-        allocate(stats%density(size(x),size(y)))
+        allocate(stats%density(size(x),size(y),size(z)))
 
         ! Also store axis information directly
         stats%x = x 
@@ -696,7 +697,9 @@ contains
         call nc_write_dim(path_out,"sigma",x=trc%stats%z)
         call nc_write_dim(path_out,"time",x=time,unlimited=.TRUE.)
 
-        call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",missing_value=int(MV), &
+!         call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="sigma",missing_value=int(MV), &
+!                       units="1",long_name="Tracer density (surface)")
+        call nc_write(path_out,"dens_srf",trc%stats%density(:,:,1),dim1="xc",dim2="yc",missing_value=int(MV), &
                       units="1",long_name="Tracer density (surface)")
 
 

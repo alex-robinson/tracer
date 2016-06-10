@@ -46,6 +46,9 @@ if (TRUE) {
     nt = length(trc$time)
     trc$U = sqrt(trc$ux^2+trc$uy^2)
 
+    # Load stats too 
+    trc$stats = load_nc("../output/GRL-20KM_trc1-stats.nc")
+
     # time strings
     trc$time_str = paste(trc$time)
     kk = trc$time<100
@@ -65,7 +68,7 @@ ptype   = "png"
 
 
 # Plot points at initial elevations
-if (TRUE) {
+if (FALSE) {
 
     xlim = c(-890,890)
     ylim = c(-1490,1490)
@@ -79,7 +82,7 @@ if (TRUE) {
     breaks_U_labs = paste(breaks_U)
     breaks_U_labs[seq(2,length(breaks_U),by=2)] = ""
 
-    for (k in 1:nt) {
+    for (k in 1:1) {
         fnm = paste0("trc_zfix_time",trc$time_str[k])
         myfigure(outfldr,fnm,asp=0.8,pointsize=8,width=120,type=ptype)
         par(plt=c(0.05,0.95,0.05,0.95),xaxs="i",yaxs="i")
