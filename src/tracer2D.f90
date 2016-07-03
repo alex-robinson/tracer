@@ -4,9 +4,9 @@ module tracer2D
     ! Makes calls to main tracer code by reshaping profile into
     ! 3D array with y-dimension thickness of 1. 
 
+    use tracer_precision
     use tracer
-    use ncio   
-    use nml 
+    use ncio    
 
     implicit none 
 
@@ -75,11 +75,11 @@ contains
         z_srf_2D(:,1) = z_srf 
         H_2D(:,1)     = H 
         ux_3D(:,1,:)  = ux 
-        uy            = 0.0 
+        uy_3D         = 0.0 
         uz_3D(:,1,:)  = uz 
 
         ! Now update tracers using 3D call 
-        call tracer_update(par,now,dep,stats,time,x,y,z,z_srf,H,ux,uy,uz)
+        call tracer_update(par,now,dep,stats,time,x,y,z,z_srf_2D,H_2D,ux_3D,uy_3D,uz_3D)
 
         return 
 

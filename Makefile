@@ -117,18 +117,28 @@ $(objdir)/tracer_interp.o: $(srcdir)/tracer_interp.f90 $(objdir)/tracer_precisio
 $(objdir)/tracer.o: $(srcdir)/tracer.f90 $(objdir)/tracer_precision.o $(objdir)/nml.o $(objdir)/ncio.o
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
+$(objdir)/tracer2D.o: $(srcdir)/tracer2D.f90 $(objdir)/tracer.o $(objdir)/tracer_precision.o $(objdir)/ncio.o
+	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
+
 obj_tracer =    $(objdir)/nml.o    \
 				$(objdir)/ncio.o   \
 				$(objdir)/tracer_precision.o \
 				$(objdir)/tracer_interp.o \
-				$(objdir)/tracer.o
+				$(objdir)/tracer.o \
+				$(objdir)/tracer2D.o
 				   
 ## Complete programs
 
-tracertest: $(obj_tracer) 
-	$(FC) $(DFLAGS) $(FLAGS) -o tracertest.x $^ $(srcdir)/tracertest.f90 $(LFLAGS)
+test: $(obj_tracer) 
+	$(FC) $(DFLAGS) $(FLAGS) -o tracertest.x $^ $(srcdir)/test_greenland.f90 $(LFLAGS)
 	@echo " "
-	@echo "    tracertest.x is ready."
+	@echo "    test_greenland.x is ready."
+	@echo " "
+
+test_profile: $(obj_tracer) 
+	$(FC) $(DFLAGS) $(FLAGS) -o tracertest.x $^ $(srcdir)/test_profile.f90 $(LFLAGS)
+	@echo " "
+	@echo "    test_profile.x is ready."
 	@echo " "
 
 clean:
