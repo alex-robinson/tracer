@@ -566,7 +566,7 @@ contains
         type(tracer_stats_class), intent(INOUT) :: stats 
         real(prec), intent(IN) :: x(:), y(:), z(:)
         
-        ! Make object is deallocated
+        ! Make surce object is deallocated
         call tracer_deallocate_stats(stats)
 
         ! Allocate tracer stats axes
