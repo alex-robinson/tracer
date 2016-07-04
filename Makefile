@@ -136,7 +136,7 @@ test: $(obj_tracer)
 	@echo " "
 
 test_profile: $(obj_tracer) 
-	$(FC) $(DFLAGS) $(FLAGS) -o tracertest.x $^ $(srcdir)/test_profile.f90 $(LFLAGS)
+	$(FC) $(DFLAGS) $(FLAGS) -o test_profile.x $^ $(srcdir)/test_profile.f90 $(LFLAGS)
 	@echo " "
 	@echo "    test_profile.x is ready."
 	@echo " "

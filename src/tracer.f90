@@ -70,10 +70,14 @@ module tracer
     type(bilin_par_type) :: par_bilin 
 
     private 
+
+    ! For tracer2D module
     public :: tracer_par_class
     public :: tracer_state_class
     public :: tracer_dep_class
     public :: tracer_stats_class
+
+    ! General public 
     public :: tracer_class 
     public :: tracer_init 
     public :: tracer_update 
