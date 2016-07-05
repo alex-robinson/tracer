@@ -93,40 +93,63 @@ contains
         type(lin3_interp_par_type), intent(IN) :: par
         real(prec), intent(IN) :: var(:,:) 
         real(prec) :: varout 
-        real(prec) :: p0, p1 
+        real(prec) :: p1, p2
+        integer    :: i, j
 
-        if (par%i .gt. 0) then 
-            p0 = var(par%i-1,par%j-1) + par%alpha_x*(var(par%i,par%j-1)-var(par%i-1,par%j-1))
-            p1 = var(par%i-1,par%j)   + par%alpha_x*(var(par%i,par%j)-var(par%i-1,par%j))
-            varout = p0 + par%alpha_y*(p1-p0)
-        else 
-            varout = MV 
+        varout = MV 
+
+        if (par%i .gt. 0 .and. par%j .gt. 0) then
+
+            i = par%i 
+            j = par%j 
+
+            ! Lower z-plane 
+            p1 = var(i-1,j-1) + par%alpha_x*(var(i,j-1)-var(i-1,j-1))
+            p2 = var(i-1,j)   + par%alpha_x*(var(i,j)-var(i-1,j))
+            varout = p1 + par%alpha_y*(p2-p1)
+
         end if 
 
         return 
 
     end function interp_bilinear
 
-!     function interp_trilinear(par,var) result (varout)
+    function interp_trilinear(par,var) result (varout)
 
-!         implicit none 
+        implicit none 
 
-!         type(lin_interp_par_type), intent(IN) :: par
-!         real(prec), intent(IN) :: var(:,:,:) 
-!         real(prec) :: varout 
-!         real(prec) :: p0, p1 
+        type(lin3_interp_par_type), intent(IN) :: par
+        real(prec), intent(IN) :: var(:,:,:) 
+        real(prec) :: varout 
+        real(prec) :: p1, p2, v1, v2 
+        integer    :: i, j, k 
 
-!         if (par%i .gt. 0) then 
-!             p0 = var(par%i-1,par%j-1) + par%alpha1*(var(par%i,par%j-1)-var(par%i-1,par%j-1))
-!             p1 = var(par%i-1,par%j)   + par%alpha1*(var(par%i,par%j)-var(par%i-1,par%j))
-!             varout = p0 + par%alpha2*(p1-p0)
-!         else 
-!             varout = MV 
-!         end if 
+        varout = MV 
 
-!         return 
+        if (par%i .gt. 0 .and. par%j .gt. 0 .and. par%k .gt. 0) then
 
-!     end function interp_trilinear
+            i = par%i 
+            j = par%j 
+            k = par%k 
+
+            ! Lower z-plane 
+            p1 = var(i-1,j-1,k-1) + par%alpha_x*(var(i,j-1,k-1)-var(i-1,j-1,k-1))
+            p2 = var(i-1,j,k-1)   + par%alpha_x*(var(i,j,k-1)-var(i-1,j,k-1))
+            v1 = p1 + par%alpha_y*(p2-p1)
+
+            ! Upper z-plane 
+            p1 = var(i-1,j-1,k) + par%alpha_x*(var(i,j-1,k)-var(i-1,j-1,k))
+            p2 = var(i-1,j,k)   + par%alpha_x*(var(i,j,k)-var(i-1,j,k))
+            v2 = p1 + par%alpha_y*(p2-p1)
+
+            ! Linear z-interpolation 
+            varout = v1 + par%alpha_z*(v2-v1)
+
+        end if 
+
+        return 
+
+    end function interp_trilinear
 
 
 end module tracer_interp 

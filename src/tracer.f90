@@ -154,6 +154,10 @@ contains
 
         ! Interpolate velocities to active point locations 
 
+
+        ! Note: sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
+
+        
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, par%n 
 
@@ -161,9 +165,9 @@ contains
                 par_bilin = interp_bilinear_weights(x,y,xout=now%x(i),yout=now%y(i))
 
                 now%H(i)   = interp_bilinear(par_bilin,H)
-                now%ux(i)  = interp_bilinear(par_bilin,ux(:,:,nz))
-                now%uy(i)  = interp_bilinear(par_bilin,uy(:,:,nz))
-                now%uz(i)  = interp_bilinear(par_bilin,uz(:,:,nz))
+                now%ux(i)  = interp_bilinear(par_bilin,ux(:,:,1))
+                now%uy(i)  = interp_bilinear(par_bilin,uy(:,:,1))
+                now%uz(i)  = interp_bilinear(par_bilin,uz(:,:,1))
                 now%uz(i)  = 0.0 
                 
                 ! Trilinear?? 
@@ -175,6 +179,8 @@ contains
 
         end do 
 
+        write(*,*) "Range(ux): ", minval(now%ux,mask=now%active.eq.2), &
+                                  maxval(now%ux,mask=now%active.eq.2)
 
         ! == TO DO == 
 
