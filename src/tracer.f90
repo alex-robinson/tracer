@@ -67,7 +67,7 @@ module tracer
 
     end type 
 
-    type(bilin_par_type) :: par_bilin 
+    type(lin3_interp_par_type) :: par_bilin 
 
     private 
 
@@ -163,9 +163,10 @@ contains
                 now%H(i)   = interp_bilinear(par_bilin,H)
                 now%ux(i)  = interp_bilinear(par_bilin,ux(:,:,nz))
                 now%uy(i)  = interp_bilinear(par_bilin,uy(:,:,nz))
-!                 now%uz(i) = interp_bilinear(par_bilin,uz(:,:,nz))
+                now%uz(i)  = interp_bilinear(par_bilin,uz(:,:,nz))
                 now%uz(i)  = 0.0 
                 
+                ! Trilinear?? 
                 now%z(i)   = interp_bilinear(par_bilin,z_srf)
                 now%T(i)   = 260.0 
                 now%thk(i) = 0.3 
@@ -185,7 +186,6 @@ contains
         ! Destroy points that moved outside the valid region 
         call tracer_deactivate(par,now)
 
-        
         ! Activate new tracers
         call tracer_activate(par,now,x,y,H=H,nmax=par%n_max_dep)
 

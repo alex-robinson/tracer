@@ -130,7 +130,7 @@ obj_tracer =    $(objdir)/nml.o    \
 ## Complete programs
 
 test: $(obj_tracer) 
-	$(FC) $(DFLAGS) $(FLAGS) -o tracertest.x $^ $(srcdir)/test_greenland.f90 $(LFLAGS)
+	$(FC) $(DFLAGS) $(FLAGS) -o test_greenland.x $^ $(srcdir)/test_greenland.f90 $(LFLAGS)
 	@echo " "
 	@echo "    test_greenland.x is ready."
 	@echo " "

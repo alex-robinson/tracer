@@ -9,7 +9,7 @@ program tracertest
     implicit none 
 
     type(tracer_class) :: trc1
-    character(len=128) :: file0, fldr, filename, filename_stats 
+    character(len=128) :: fldr, filename, filename_stats 
 
     integer :: k, kmax, q 
     real(4) :: time, time_end, dt  
@@ -28,41 +28,40 @@ program tracertest
     call calc_profile_RH2013(prof1)
     call profile_write(prof1,fldr="output",filename="profile_RH2013.nc")
 
-    stop 
+    fldr     = "output"
+    filename       = "profile_RH2013_trc1.nc"
+    filename_stats = "profile_RH2013_trc1-stats.nc"
 
-!     fldr     = "output"
-!     filename       = "GRL-20KM_trc1.nc"
-!     filename_stats = "GRL-20KM_trc1-stats.nc"
+    ! Test tracer_update
+    time     = 0.0 
+    time_end = 1002.0
+    dt       = 1.0 
 
-!     ! Test tracer_update
-!     time     = 0.0 
-!     time_end = 1002.0
-!     dt       = 1.0 
+    ! Initialize tracer and output file 
+    call tracer2D_init(trc1,time=time,x=prof1%xc,z=prof1%sigma)
+    call tracer2D_write_init(trc1,fldr,filename)
 
-!     ! Initialize tracer and output file 
-!     call tracer2D_init(trc1,time=time,x=xc,z=sigma)
-!     call tracer2D_write_init(trc1,fldr,filename)
+    q = 9 
 
-!     q = 9 
+    do k = 1, int(time_end/dt), int(dt) 
 
-!     do k = 1, int(time_end/dt), int(dt) 
+        if (k .gt. 1) time = time + dt 
+        write(*,*) "time = ", time, trc1%par%n_active
 
-!         if (k .gt. 1) time = time + dt 
-!         write(*,*) "time = ", time, trc1%par%n_active
+        call tracer2D_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
+                             x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
+                             ux=prof1%ux,uz=prof1%uz)
 
-!         call tracer2D_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
-!                              x=xc,z=sigma,z_srf=zs,H=H,ux=ux,uz=uz)
+        q = q+1 
+        if (q==10) then 
+            call tracer2D_write(trc1,time,fldr,filename)
+            q = 0 
+        end if 
 
-!         q = q+1 
-!         if (q==10) then 
-!             call tracer2D_write(trc1,time,fldr,filename)
-!             q = 0 
-!         end if 
+    end do 
 
-!     end do 
-
-!     ! Write stats 
-!     call tracer2D_write_stats(trc1,time,fldr,filename_stats)
+    ! Write stats 
+    call tracer2D_write_stats(trc1,time,fldr,filename_stats)
 
 contains 
 
@@ -117,20 +116,22 @@ contains
         do i = 1, prof%nz 
             prof%sigma(i) = 0.0 + (i-1)/real(prof%nz-1) * 1.0 
         end do 
-        prof%sigma(1) = 1e-8   ! To avoid singularities 
+        prof%sigma(1) = 1e-6   ! To avoid singularities 
 
         ! Calculate H0 (should be H0=3598.4 m)
         H0 = (20.0*M/A)**(1.0/(2.0*(ng+1)))*(1/(rho*g))**(ng/(2.0*(ng+1)))*L**(1.0/2.0)
         
         ! Calculate H(x) 
-        prof%H  = H0 * (1.0-(prof%xc/L)**((ng+1.0)/ng))**(real(ng)/(2.0*(ng+1.0)))
+        prof%H = H0 * (1.0-(prof%xc/L)**((ng+1.0)/ng))**(real(ng)/(2.0*(ng+1.0)))
 
-        prof%ux  = 0.0 
-        prof%uz  = 0.0 
-        prof%age = 0.0 
+        prof%ux   = 0.0 
+        prof%uz   = 0.0 
+        prof%age  = 0.0 
+        prof%dHdx = 0.0
 
         ! Calculate velocities 
         do i = 2, prof%nx
+!             dHdx = (prof%H(i+1)-prof%H(i))/(prof%xc(i+1)-prof%xc(i))
             dHdx = (prof%H(i)-prof%H(i-1))/(prof%xc(i)-prof%xc(i-1))
             prof%dHdx(i) = dHdx
             H    = prof%H(i) 
@@ -150,12 +151,12 @@ contains
         prof%age(1) = prof%age(2)
         
 
-        ! Write summary 
-        write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 
-        write(*,"(a,500f8.2)") "sigma: ", prof%sigma 
-        write(*,"(a,f10.2)") "H0 = ", H0 
-        write(*,"(a,2f10.2)") "range(ux): ", minval(prof%ux), maxval(prof%ux)
-        write(*,"(a,2f10.2)") "range(uz): ", minval(prof%uz), maxval(prof%uz)
+!         ! Write summary 
+!         write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 
+!         write(*,"(a,500f8.2)") "sigma: ", prof%sigma 
+!         write(*,"(a,f10.2)") "H0 = ", H0 
+!         write(*,"(a,2f10.2)") "range(ux): ", minval(prof%ux), maxval(prof%ux)
+!         write(*,"(a,2f10.2)") "range(uz): ", minval(prof%uz), maxval(prof%uz)
 
         return 
 
