@@ -5,7 +5,7 @@ program tracertest
     use tracer 
     use tracer2D 
     use tracer_precision 
-    
+
     implicit none 
 
     type(tracer_class) :: trc1
@@ -18,7 +18,9 @@ program tracertest
         integer :: nx, nz
         integer, allocatable :: dims(:) 
         real(4), allocatable :: xc(:), sigma(:)
-        real(4), allocatable :: zs(:), zb(:), H(:), ux(:,:), uz(:,:)
+        real(4), allocatable :: zs(:), zb(:), H(:), dHdx(:), ux(:,:), uz(:,:)
+        real(4), allocatable :: age(:)
+
     end type 
 
     type(profile_class) :: prof1 
@@ -83,8 +85,12 @@ contains
         real(4), parameter :: L = 10.0**6     ! m 
 
         ! Local variables 
-        integer :: i 
-        real(8) :: H0 
+        integer :: i, j 
+        real(4) :: H0, dHdx, H 
+        real(4) :: GG, B 
+
+        GG = M 
+        B  = 0 
 
         prof%nx = 51    ! Right-hand side symmetrical of domain
         prof%nz = 101
@@ -94,9 +100,12 @@ contains
         allocate(prof%zs(prof%nx))
         allocate(prof%zb(prof%nx))
         allocate(prof%H(prof%nx))
-        
+        allocate(prof%dHdx(prof%nx)) 
+
         allocate(prof%ux(prof%nx,prof%nz))
         allocate(prof%uz(prof%nx,prof%nz))
+
+        allocate(prof%age(prof%nz))
 
         ! Define x-dimension (0-1000 km)
         do i = 1, prof%nx 
@@ -108,6 +117,7 @@ contains
         do i = 1, prof%nz 
             prof%sigma(i) = 0.0 + (i-1)/real(prof%nz-1) * 1.0 
         end do 
+        prof%sigma(1) = 1e-8   ! To avoid singularities 
 
         ! Calculate H0 (should be H0=3598.4 m)
         H0 = (20.0*M/A)**(1.0/(2.0*(ng+1)))*(1/(rho*g))**(ng/(2.0*(ng+1)))*L**(1.0/2.0)
@@ -115,10 +125,37 @@ contains
         ! Calculate H(x) 
         prof%H  = H0 * (1.0-(prof%xc/L)**((ng+1.0)/ng))**(real(ng)/(2.0*(ng+1.0)))
 
+        prof%ux  = 0.0 
+        prof%uz  = 0.0 
+        prof%age = 0.0 
+
+        ! Calculate velocities 
+        do i = 2, prof%nx
+            dHdx = (prof%H(i)-prof%H(i-1))/(prof%xc(i)-prof%xc(i-1))
+            prof%dHdx(i) = dHdx
+            H    = prof%H(i) 
+            do j = 1, prof%nz
+
+                prof%ux(i,j) = -(2.0*A)/(ng+1.0)*(rho*g)**ng * dHdx**(ng-1.0) &
+                  * dHdx * (H**(ng+1.0)-(H-prof%sigma(j)*H)**(ng+1.0))
+
+                prof%uz(i,j) = prof%sigma(j)*(-GG+B+prof%ux(i,j)*dHdx) - B
+
+                
+            end do 
+        end do 
+
+        ! Calculate analytical age at the divide
+        prof%age = (H0/G)*log(prof%sigma)
+        prof%age(1) = prof%age(2)
+        
+
         ! Write summary 
         write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 
         write(*,"(a,500f8.2)") "sigma: ", prof%sigma 
         write(*,"(a,f10.2)") "H0 = ", H0 
+        write(*,"(a,2f10.2)") "range(ux): ", minval(prof%ux), maxval(prof%ux)
+        write(*,"(a,2f10.2)") "range(uz): ", minval(prof%uz), maxval(prof%uz)
 
         return 
 
@@ -141,7 +178,12 @@ contains
         call nc_write_dim(path_out,"xc",x=prof%xc*1e-3,units="kilometers")
         call nc_write_dim(path_out,"sigma",x=prof%sigma,units="1")
 
-        call nc_write(path_out,"H",prof%H,dim1="xc",missing_value=MV)
+        call nc_write(path_out,"H",   prof%H,   dim1="xc",missing_value=MV)
+        call nc_write(path_out,"dHdx",prof%dHdx,dim1="xc",missing_value=MV)
+        call nc_write(path_out,"ux",prof%ux,dim1="xc",dim2="sigma",missing_value=MV)
+        call nc_write(path_out,"uz",prof%uz,dim1="xc",dim2="sigma",missing_value=MV)
+        call nc_write(path_out,"umag",sqrt(prof%ux**2+prof%uz**2),dim1="xc",dim2="sigma",missing_value=MV)
+        call nc_write(path_out,"age",prof%age,dim1="sigma",missing_value=MV)
         
         return 
 
