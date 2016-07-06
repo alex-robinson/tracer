@@ -11,6 +11,7 @@ module tracer
     
     type tracer_par_class 
         integer :: n, n_active, n_max_dep, id_max 
+        logical :: is_sigma                     ! Is the defined z-axis in sigma coords
         real(prec) :: time_now, time_old, dt 
         real(prec) :: thk_min                   ! Minimum thickness of tracer (m)
         real(prec) :: H_min                     ! Minimum ice thickness to track (m)
@@ -27,7 +28,7 @@ module tracer
     type tracer_state_class 
         integer,    allocatable :: active(:)
         integer,    allocatable :: id(:)
-        real(prec), allocatable :: x(:), y(:), z(:)
+        real(prec), allocatable :: x(:), y(:), z(:), sigma(:)
         real(prec), allocatable :: ux(:), uy(:), uz(:)
         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
         real(prec), allocatable :: T(:)              ! Current temperature of the tracer (for borehole comparison, internal melting...)
@@ -67,7 +68,7 @@ module tracer
 
     end type 
 
-    type(lin3_interp_par_type) :: par_bilin 
+    type(lin3_interp_par_type) :: par_lin 
 
     private 
 
@@ -87,16 +88,18 @@ module tracer
 
 contains 
 
-    subroutine tracer_init(trc,time,x,y,z)
+    subroutine tracer_init(trc,time,x,y,z,is_sigma)
 
         implicit none 
 
         type(tracer_class),   intent(OUT) :: trc 
         real(prec), intent(IN) :: x(:), y(:), z(:)
+        logical,    intent(IN) :: is_sigma 
+
         real(4) :: time 
 
         ! Load the parameters
-        call tracer_par_load(trc%par)
+        call tracer_par_load(trc%par,is_sigma)
 
         ! Allocate the state variables 
         call tracer_allocate(trc%now,trc%dep,n=trc%par%n)
@@ -128,7 +131,7 @@ contains
 
     end subroutine tracer_init
 
-    subroutine tracer_update(par,now,dep,stats,time,x,y,z,z_srf,H,ux,uy,uz)
+    subroutine tracer_update(par,now,dep,stats,time,x,y,z,z_srf,H,ux,uy,uz,order)
 
         implicit none 
 
@@ -140,38 +143,65 @@ contains
         real(prec), intent(IN) :: x(:), y(:), z(:)
         real(prec), intent(IN) :: z_srf(:,:), H(:,:)
         real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
-        
+        character(len=*), optional :: order 
+
         ! Local variables  
-        integer :: i, nz 
+        character(len=3) :: idx_order 
+        real(prec) :: zc(size(z))   ! Actual cartesian z-axis after applying sigma*H
+        real(prec) :: z_srf_now  
+        integer    :: i, nz 
+        real(prec), allocatable :: x1(:), y1(:), z1(:)
+        real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
 
         ! Update current time 
         par%time_old = par%time_now 
         par%time_now = time 
         par%dt       = par%time_now - par%time_old 
 
+
+        ! Determine order of indices (default ijk)
+        idx_order = "ijk"
+        if (present(order)) idx_order = trim(order)
+
+        ! Also determine whether z-axis is ascending or descending 
+        call tracer_reshape3D(idx_order,x,y,z,ux,uy,uz,x1,y1,z1,ux1,uy1,uz1)
+
+
         nz = size(ux,3)
 
 
-        ! Interpolate velocities to active point locations 
+        ! Note: GRISLI: sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
+        !       SICO: sigma(1) = 0, sigma(nz) = 1
 
-
-        ! Note: sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
-
-        
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, par%n 
 
             if (now%active(i) .eq. 2) then 
-                par_bilin = interp_bilinear_weights(x,y,xout=now%x(i),yout=now%y(i))
 
-                now%H(i)   = interp_bilinear(par_bilin,H)
-                now%ux(i)  = interp_bilinear(par_bilin,ux(:,:,1))
-                now%uy(i)  = interp_bilinear(par_bilin,uy(:,:,1))
-                now%uz(i)  = interp_bilinear(par_bilin,uz(:,:,1))
-                now%uz(i)  = 0.0 
+                ! == TO DO: We need 3D interpolation here!!!
+
+                ! 1. Calc bilin weights at x/y locations
+                ! 2. Get H and z-axis at that location
+                ! 3. Calculate lin weights for z values 
+                ! 4. Perform trilinear interpolation 
+
+                par_lin = interp_bilinear_weights(x,y,xout=now%x(i),yout=now%y(i))
+                now%H(i)   = interp_bilinear(par_lin,H)
+                z_srf_now  = interp_bilinear(par_lin,z_srf)
+
+                ! Calculate zc-axis for the current point
+                zc = z_srf_now - z*now%H(i)
+
+                par_lin = interp_trilinear_weights(x,y,zc,xout=now%x(i),yout=now%y(i),zout=now%z(i))
+
+                now%ux(i)  = interp_bilinear(par_lin,ux(:,:,1))
+                now%uy(i)  = interp_bilinear(par_lin,uy(:,:,1))
+                now%uz(i)  = interp_bilinear(par_lin,uz(:,:,1))
                 
-                ! Trilinear?? 
-                now%z(i)   = interp_bilinear(par_bilin,z_srf)
+                ! Until trilinear interp is ready, maintain z-position at surface
+                now%z(i)   = interp_bilinear(par_lin,z_srf)
+
+
                 now%T(i)   = 260.0 
                 now%thk(i) = 0.3 
 
@@ -179,12 +209,8 @@ contains
 
         end do 
 
-        write(*,*) "Range(ux): ", minval(now%ux,mask=now%active.eq.2), &
-                                  maxval(now%ux,mask=now%active.eq.2)
-
-        ! == TO DO == 
-
         ! Update the tracer thickness, then destroy points that are too thin 
+        ! == TO DO == 
 
         ! Update the tracer positions 
         call calc_position(now%x,now%y,now%z,now%ux,now%uy,now%uz,par%dt,now%active)
@@ -201,15 +227,17 @@ contains
             if (now%active(i) .eq. 1) then 
                 ! Point became active now, further initializations needed below
 
-                par_bilin = interp_bilinear_weights(x,y,xout=now%x(i),yout=now%y(i))
+                ! Point is at the surface, so only bilinear interpolation is needed
+                par_lin = interp_bilinear_weights(x,y,xout=now%x(i),yout=now%y(i))
 
-                now%z(i)   = interp_bilinear(par_bilin,z_srf)
-                now%H(i)   = interp_bilinear(par_bilin,H)
-                now%ux(i)  = interp_bilinear(par_bilin,ux(:,:,nz))
-                now%uy(i)  = interp_bilinear(par_bilin,uy(:,:,nz))
-!                 now%uz(i) = interp_bilinear(par_bilin,uz(:,:,nz))
-                now%uz(i)  = 0.0 
+                ! Apply interpolation weights to variables
+                now%z(i)   = interp_bilinear(par_lin,z_srf)
+                now%H(i)   = interp_bilinear(par_lin,H)
+                now%ux(i)  = interp_bilinear(par_lin,ux(:,:,1))
+                now%uy(i)  = interp_bilinear(par_lin,uy(:,:,1))
+                now%uz(i)  = interp_bilinear(par_lin,uz(:,:,1)) 
                 
+                ! Assign deposition quantities
                 now%T(i)   = 260.0 
                 now%thk(i) = 0.3 
 
@@ -477,15 +505,18 @@ contains
     !
     ! ================================================
 
-    subroutine tracer_par_load(par)
+    subroutine tracer_par_load(par,is_sigma)
 
         implicit none 
 
         type(tracer_par_class), intent(OUT) :: par 
+        logical, intent(IN) :: is_sigma 
 
         par%n         = 5000
         par%n_max_dep = 500
         par%n_active  = 0 
+
+        par%is_sigma  = is_sigma 
 
         par%time_now = 0.0 
         par%time_old = 0.0 
@@ -522,7 +553,7 @@ contains
         ! Allocate tracer 
         allocate(now%active(n))
         allocate(now%id(n))
-        allocate(now%x(n),now%y(n),now%z(n))
+        allocate(now%x(n),now%y(n),now%z(n), now%sigma(n))
         allocate(now%ux(n),now%uy(n),now%uz(n))
         allocate(now%thk(n))
         allocate(now%T(n))
@@ -550,6 +581,7 @@ contains
         if (allocated(now%x))         deallocate(now%x)
         if (allocated(now%y))         deallocate(now%y)
         if (allocated(now%z))         deallocate(now%z)
+        if (allocated(now%sigma))     deallocate(now%sigma)
         if (allocated(now%ux))        deallocate(now%ux)
         if (allocated(now%uy))        deallocate(now%uy)
         if (allocated(now%uz))        deallocate(now%uz)
@@ -614,6 +646,100 @@ contains
     end subroutine tracer_deallocate_stats
 
     
+    subroutine tracer_reshape3D(idx_order,x,y,z,ux,uy,uz,x1,y1,z1,ux1,uy1,uz1)
+
+        implicit none 
+
+        character(len=3), intent(IN) :: idx_order 
+        real(prec), intent(IN) :: x(:), y(:), z(:)
+        real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
+
+        real(prec), intent(OUT), allocatable :: x1(:), y1(:), z1(:)
+        real(prec), intent(OUT), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
+        integer :: i, j, k
+        integer :: nx, ny, nz 
+
+        nx = size(x)
+        ny = size(y)
+        nz = size(z) 
+
+        if (allocated(x1))  deallocate(x1)
+        if (allocated(y1))  deallocate(y1)
+        if (allocated(z1))  deallocate(z1)
+        if (allocated(ux1)) deallocate(ux1)
+        if (allocated(uy1)) deallocate(uy1)
+        if (allocated(uz1)) deallocate(uz1)
+
+        allocate(x1(nx))
+        allocate(y1(ny))
+        allocate(z1(nz))
+        allocate(ux1(nx,ny,nz))
+        allocate(uy1(nx,ny,nz))
+        allocate(uz1(nx,ny,nz))
+
+        x1 = x 
+        y1 = y 
+
+        select case(trim(idx_order))
+
+            case("ijk")
+                ! x, y, z array order 
+
+                if (z(1) .lt. z(nz)) then 
+                    ! Already ascending z-axis
+                    z1  = z  
+                    ux1 = ux 
+                    uy1 = uy 
+                    uz1 = uz 
+
+                else   
+                    ! Reversed z-axis 
+                    z1  = z(nz:1)
+                    ux1 = ux(:,:,nz:1)
+                    uy1 = uy(:,:,nz:1)
+                    uz1 = uz(:,:,nz:1)
+
+                end if 
+
+            case("kji")
+                ! z, y, x array order 
+
+                if (z(1) .lt. z(nz)) then 
+                    ! Already ascending z-axis
+                    z1  = z  
+                    do i = 1, nx 
+                    do j = 1, ny 
+                        ux1(i,j,:) = ux(:,j,i)
+                        uy1(i,j,:) = uy(:,j,i)
+                        uz1(i,j,:) = uz(:,j,i)
+                    end do 
+                    end do 
+
+                else   
+                    ! Reversed z-axis 
+                    z1  = z(nz:1)
+                    do i = 1, nx 
+                    do j = 1, ny 
+                        ux1(i,j,:) = ux(nz:1,j,i)
+                        uy1(i,j,:) = uy(nz:1,j,i)
+                        uz1(i,j,:) = uz(nz:1,j,i)
+                    end do 
+                    end do 
+
+                end if 
+
+            case DEFAULT 
+
+                write(*,*) "tracer_reshape3D:: error: unrecognized array order: ",trim(idx_order)
+                write(*,*) "    Possible choices are: ijk, kji"
+                stop  
+
+        end select 
+
+        return 
+
+    end subroutine tracer_reshape3D
+
 
     ! ================================================
     !

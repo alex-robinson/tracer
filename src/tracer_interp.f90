@@ -19,8 +19,8 @@ module tracer_interp
 
     public :: lin_interp_par_type
     public :: lin3_interp_par_type
-    public :: interp_bilinear_weights 
-    public :: interp_bilinear 
+    public :: interp_bilinear_weights, interp_bilinear 
+    public :: interp_trilinear_weights, interp_trilinear  
 
 contains 
 
@@ -85,6 +85,26 @@ contains
         return 
 
     end function interp_bilinear_weights
+
+    function interp_trilinear_weights(x,y,z,xout,yout,zout) result(par)
+
+        ! Find closest x-indices and closest y-indices on original
+        ! grid (assume these and next indices will bracket our point)
+        ! Save the indices and weights for interpolation of variables later
+
+        implicit none 
+
+        real(prec), intent(IN) :: x(:), y(:), z(:) 
+        real(prec), intent(IN) :: xout, yout, zout
+        type(lin3_interp_par_type)   :: par 
+
+        call calc_interp_linear_weights(par%i,par%alpha_x,x,xout)
+        call calc_interp_linear_weights(par%j,par%alpha_y,y,yout)
+        call calc_interp_linear_weights(par%k,par%alpha_z,z,zout)
+        
+        return 
+
+    end function interp_trilinear_weights
 
     function interp_bilinear(par,var) result (varout)
 

@@ -38,7 +38,7 @@ program tracertest
     dt       = 1.0 
 
     ! Initialize tracer and output file 
-    call tracer2D_init(trc1,time=time,x=prof1%xc,z=prof1%sigma)
+    call tracer2D_init(trc1,time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,filename)
 
     q = 9 

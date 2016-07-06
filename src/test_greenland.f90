@@ -59,7 +59,7 @@ program tracertest
     dt       = 1.0 
 
     ! Initialize tracer and output file 
-    call tracer_init(trc1,time=time,x=xc,y=yc,z=sigma)
+    call tracer_init(trc1,time=time,x=xc,y=yc,z=sigma,is_sigma=.TRUE.)
     call tracer_write_init(trc1,fldr,filename)
 
     q = 9 
