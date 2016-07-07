@@ -55,7 +55,7 @@ program tracertest
 
     ! Test tracer_update
     time     = 0.0 
-    time_end = 12.0
+    time_end = 102.0
     dt       = 1.0 
 
     ! Initialize tracer and output file 

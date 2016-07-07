@@ -149,9 +149,10 @@ contains
         character(len=3) :: idx_order 
         real(prec) :: zc(size(z))   ! Actual cartesian z-axis after applying sigma*H
         real(prec) :: z_srf_now  
-        integer    :: i, nz 
+        integer    :: i, nz, ksrf, kbase  
         real(prec), allocatable :: x1(:), y1(:), z1(:)
         real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
+        logical :: z_descending 
 
         ! Update current time 
         par%time_old = par%time_now 
@@ -169,8 +170,17 @@ contains
         ! Note: GRISLI (nx,ny,nz): sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
         !       SICO (nz,ny,nx): sigma(1) = 0, sigma(nz) = 1
         ! Using tracer_reshape3D homogenizes them to ascending z-axis (nx,ny,nz)
-         
+        
         nz = size(ux1,3)
+        z_descending = .FALSE. 
+        if (z1(1) .gt. z1(nz)) z_descending = .TRUE. 
+
+        kbase = 1
+        ksrf = nz 
+        if (z_descending) then 
+            kbase = nz 
+            ksrf  = 1 
+        end if
 
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, par%n 
@@ -189,7 +199,8 @@ contains
                 z_srf_now  = interp_bilinear(par_lin,z_srf)
 
                 ! Calculate zc-axis for the current point
-                zc = z_srf_now - z1*now%H(i)
+                ! (z_bedrock + ice thickness)
+                zc = (z_srf_now-now%H(i)) + z1*now%H(i)
 
                 par_lin = interp_trilinear_weights(x1,y1,zc,xout=now%x(i),yout=now%y(i),zout=now%z(i))
 
@@ -232,9 +243,9 @@ contains
                 ! Apply interpolation weights to variables
                 now%z(i)   = interp_bilinear(par_lin,z_srf)
                 now%H(i)   = interp_bilinear(par_lin,H)
-                now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
-                now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
-                now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz)) 
+                now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,ksrf))
+                now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,ksrf))
+                now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,ksrf)) 
                 
                 ! Assign deposition quantities
                 now%T(i)   = 260.0 
@@ -684,28 +695,30 @@ contains
             case("ijk")
                 ! x, y, z array order 
 
-                if (z(1) .lt. z(nz)) then 
-                    ! Already ascending z-axis
+!                 if (z(1) .lt. z(nz)) then 
+!                     ! Already ascending z-axis
+
                     z1  = z  
                     ux1 = ux 
                     uy1 = uy 
                     uz1 = uz 
 
-                else   
-                    ! Reversed z-axis 
-                    do k = 1, nz 
-                        z1(k)      = z(nz-k+1)
-                        ux1(:,:,k) = ux(:,:,nz-k+1)
-                        uy1(:,:,k) = uy(:,:,nz-k+1)
-                        uz1(:,:,k) = uz(:,:,nz-k+1)
-                    end do 
-                end if 
+!                 else   
+!                     ! Reversed z-axis 
+!                     do k = 1, nz 
+!                         z1(k)      = z(nz-k+1)
+!                         ux1(:,:,k) = ux(:,:,nz-k+1)
+!                         uy1(:,:,k) = uy(:,:,nz-k+1)
+!                         uz1(:,:,k) = uz(:,:,nz-k+1)
+!                     end do 
+!                 end if 
 
             case("kji")
                 ! z, y, x array order 
 
-                if (z(1) .lt. z(nz)) then 
-                    ! Already ascending z-axis
+!                 if (z(1) .lt. z(nz)) then 
+!                     ! Already ascending z-axis
+
                     z1  = z  
                     do i = 1, nx 
                     do j = 1, ny 
@@ -715,20 +728,20 @@ contains
                     end do 
                     end do 
 
-                else   
-                    ! Reversed z-axis 
-                    z1  = z(nz:1)
-                    do i = 1, nx 
-                    do j = 1, ny
-                        do k = 1, nz 
-                            ux1(i,j,k) = ux(nz-k+1,j,i)
-                            uy1(i,j,k) = uy(nz-k+1,j,i)
-                            uz1(i,j,k) = uz(nz-k+1,j,i)
-                        end do 
-                    end do 
-                    end do 
+!                 else   
+!                     ! Reversed z-axis 
+!                     z1  = z(nz:1)
+!                     do i = 1, nx 
+!                     do j = 1, ny
+!                         do k = 1, nz 
+!                             ux1(i,j,k) = ux(nz-k+1,j,i)
+!                             uy1(i,j,k) = uy(nz-k+1,j,i)
+!                             uz1(i,j,k) = uz(nz-k+1,j,i)
+!                         end do 
+!                     end do 
+!                     end do 
 
-                end if 
+!                 end if 
 
             case DEFAULT 
 
