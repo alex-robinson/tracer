@@ -166,12 +166,11 @@ contains
         ! Also determine whether z-axis is ascending or descending 
         call tracer_reshape3D(idx_order,x,y,z,ux,uy,uz,x1,y1,z1,ux1,uy1,uz1)
 
-
-        nz = size(ux,3)
-
-
-        ! Note: GRISLI: sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
-        !       SICO: sigma(1) = 0, sigma(nz) = 1
+        ! Note: GRISLI (nx,ny,nz): sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
+        !       SICO (nz,ny,nx): sigma(1) = 0, sigma(nz) = 1
+        ! Using tracer_reshape3D homogenizes them to ascending z-axis (nx,ny,nz)
+         
+        nz = size(ux1,3)
 
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, par%n 
@@ -185,18 +184,18 @@ contains
                 ! 3. Calculate lin weights for z values 
                 ! 4. Perform trilinear interpolation 
 
-                par_lin = interp_bilinear_weights(x,y,xout=now%x(i),yout=now%y(i))
+                par_lin = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
                 now%H(i)   = interp_bilinear(par_lin,H)
                 z_srf_now  = interp_bilinear(par_lin,z_srf)
 
                 ! Calculate zc-axis for the current point
-                zc = z_srf_now - z*now%H(i)
+                zc = z_srf_now - z1*now%H(i)
 
-                par_lin = interp_trilinear_weights(x,y,zc,xout=now%x(i),yout=now%y(i),zout=now%z(i))
+                par_lin = interp_trilinear_weights(x1,y1,zc,xout=now%x(i),yout=now%y(i),zout=now%z(i))
 
-                now%ux(i)  = interp_bilinear(par_lin,ux(:,:,1))
-                now%uy(i)  = interp_bilinear(par_lin,uy(:,:,1))
-                now%uz(i)  = interp_bilinear(par_lin,uz(:,:,1))
+                now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
+                now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
+                now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
                 
                 ! Until trilinear interp is ready, maintain z-position at surface
                 now%z(i)   = interp_bilinear(par_lin,z_srf)
@@ -219,7 +218,7 @@ contains
         call tracer_deactivate(par,now)
 
         ! Activate new tracers
-        call tracer_activate(par,now,x,y,H=H,nmax=par%n_max_dep)
+        call tracer_activate(par,now,x1,y1,H=H,nmax=par%n_max_dep)
 
         ! Finish activation for necessary points 
         do i = 1, par%n 
@@ -228,14 +227,14 @@ contains
                 ! Point became active now, further initializations needed below
 
                 ! Point is at the surface, so only bilinear interpolation is needed
-                par_lin = interp_bilinear_weights(x,y,xout=now%x(i),yout=now%y(i))
+                par_lin = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
 
                 ! Apply interpolation weights to variables
                 now%z(i)   = interp_bilinear(par_lin,z_srf)
                 now%H(i)   = interp_bilinear(par_lin,H)
-                now%ux(i)  = interp_bilinear(par_lin,ux(:,:,1))
-                now%uy(i)  = interp_bilinear(par_lin,uy(:,:,1))
-                now%uz(i)  = interp_bilinear(par_lin,uz(:,:,1)) 
+                now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
+                now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
+                now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz)) 
                 
                 ! Assign deposition quantities
                 now%T(i)   = 260.0 
@@ -259,7 +258,7 @@ contains
 
         ! Calculate density 
         stats%density = 0 
-        stats%density(:,:,1) = calc_tracer_density(par,now,x,y,z_srf)
+        stats%density(:,:,nz) = calc_tracer_density(par,now,x1,y1,z_srf)
 
         return 
 
@@ -654,8 +653,8 @@ contains
         real(prec), intent(IN) :: x(:), y(:), z(:)
         real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
 
-        real(prec), intent(OUT), allocatable :: x1(:), y1(:), z1(:)
-        real(prec), intent(OUT), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
+        real(prec), intent(INOUT), allocatable :: x1(:), y1(:), z1(:)
+        real(prec), intent(INOUT), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
         integer :: i, j, k
         integer :: nx, ny, nz 
 
@@ -676,7 +675,7 @@ contains
         allocate(ux1(nx,ny,nz))
         allocate(uy1(nx,ny,nz))
         allocate(uz1(nx,ny,nz))
-
+        
         x1 = x 
         y1 = y 
 
@@ -694,11 +693,12 @@ contains
 
                 else   
                     ! Reversed z-axis 
-                    z1  = z(nz:1)
-                    ux1 = ux(:,:,nz:1)
-                    uy1 = uy(:,:,nz:1)
-                    uz1 = uz(:,:,nz:1)
-
+                    do k = 1, nz 
+                        z1(k)      = z(nz-k+1)
+                        ux1(:,:,k) = ux(:,:,nz-k+1)
+                        uy1(:,:,k) = uy(:,:,nz-k+1)
+                        uz1(:,:,k) = uz(:,:,nz-k+1)
+                    end do 
                 end if 
 
             case("kji")
@@ -719,10 +719,12 @@ contains
                     ! Reversed z-axis 
                     z1  = z(nz:1)
                     do i = 1, nx 
-                    do j = 1, ny 
-                        ux1(i,j,:) = ux(nz:1,j,i)
-                        uy1(i,j,:) = uy(nz:1,j,i)
-                        uz1(i,j,:) = uz(nz:1,j,i)
+                    do j = 1, ny
+                        do k = 1, nz 
+                            ux1(i,j,k) = ux(nz-k+1,j,i)
+                            uy1(i,j,k) = uy(nz-k+1,j,i)
+                            uz1(i,j,k) = uz(nz-k+1,j,i)
+                        end do 
                     end do 
                     end do 
 
@@ -825,8 +827,10 @@ contains
         character(len=*), intent(IN)   :: fldr, filename 
 
         ! Local variables 
-        integer :: nt 
+        integer :: nt, nz 
         character(len=512) :: path_out 
+
+        nz = size(trc%stats%density,3)
 
         path_out = trim(fldr)//"/"//trim(filename)
 
@@ -839,7 +843,7 @@ contains
 
 !         call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="sigma",missing_value=int(MV), &
 !                       units="1",long_name="Tracer density (surface)")
-        call nc_write(path_out,"dens_srf",trc%stats%density(:,:,1),dim1="xc",dim2="yc",missing_value=int(MV), &
+        call nc_write(path_out,"dens_srf",trc%stats%density(:,:,nz),dim1="xc",dim2="yc",missing_value=int(MV), &
                       units="1",long_name="Tracer density (surface)")
 
 
