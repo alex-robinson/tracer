@@ -204,13 +204,15 @@ contains
 
                 par_lin = interp_trilinear_weights(x1,y1,zc,xout=now%x(i),yout=now%y(i),zout=now%z(i))
 
-                now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
-                now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
-                now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
-                
-                ! Until trilinear interp is ready, maintain z-position at surface
-                now%z(i)   = interp_bilinear(par_lin,z_srf)
+                now%ux(i)  = interp_trilinear(par_lin,ux1)
+                now%uy(i)  = interp_trilinear(par_lin,uy1)
+                now%uz(i)  = interp_trilinear(par_lin,uz1)
 
+!                 now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
+!                 now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
+!                 now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
+!                 ! Until trilinear interp is ready, maintain z-position at surface
+!                 now%z(i)   = interp_bilinear(par_lin,z_srf)
 
                 now%T(i)   = 260.0 
                 now%thk(i) = 0.3 
