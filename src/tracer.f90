@@ -26,8 +26,7 @@ module tracer
     end type 
 
     type tracer_state_class 
-        integer,    allocatable :: active(:)
-        integer,    allocatable :: id(:)
+        integer,    allocatable :: active(:), id(:)
         real(prec), allocatable :: x(:), y(:), z(:), sigma(:)
         real(prec), allocatable :: ux(:), uy(:), uz(:)
         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
@@ -44,7 +43,6 @@ module tracer
 
     type tracer_dep_class 
         ! Standard deposition information (time and place)
-        integer,    allocatable :: id(:)
         real(prec), allocatable :: time(:) 
         real(prec), allocatable :: H(:) 
         real(prec), allocatable :: x(:), y(:), z(:)
@@ -196,7 +194,7 @@ contains
                 ! 2. Get H and z-axis at that location
                 ! 3. Calculate lin weights for z values 
                 ! 4. Perform trilinear interpolation 
-                
+
                 par_lin    = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
                 now%H(i)   = interp_bilinear(par_lin,H)
                 z_srf_now  = interp_bilinear(par_lin,z_srf)
@@ -231,7 +229,7 @@ contains
         call calc_position(now%x,now%y,now%z,now%ux,now%uy,now%uz,par%dt,now%active)
 
         ! Destroy points that moved outside the valid region 
-        call tracer_deactivate(par,now)
+        call tracer_deactivate(par,now,x1,y1)
 
         ! Activate new tracers
         call tracer_activate(par,now,x1,y1,H=H,nmax=par%n_max_dep)
@@ -252,9 +250,12 @@ contains
                 now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,ksrf))
                 now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,ksrf)) 
 
-                ! Assign deposition quantities
+                ! Initialize state variables
                 now%T(i)   = 260.0 
                 now%thk(i) = 0.3 
+
+                ! Define deposition values 
+                dep%time(i) = par%time_now 
 
                 now%active(i) = 2 
 
@@ -318,6 +319,7 @@ contains
         real(prec) :: p(size(H,1),size(H,2))
         integer :: i, j, k, ij(2)
         real(prec), allocatable :: jit(:,:), dens(:,:)
+        real(prec) :: xmin, ymin, xmax, ymax 
 
         ! How many points can be activated?
         ntot = min(nmax,count(now%active == 0))
@@ -331,17 +333,22 @@ contains
         jit = (jit - 0.5)
         jit(1,:) = jit(1,:)*(x(2)-x(1)) 
 
-        if (size(y,1) .gt. 1) then 
+        if (size(y,1) .gt. 2) then 
             jit(2,:) = jit(2,:)*(y(2)-y(1)) 
-        else 
+        else   ! Profile
             jit(2,:) = 0.0 
         end if 
-
 
 !         write(*,*) "range jit: ", minval(jit), maxval(jit)
 !         write(*,*) "npts: ", count(npts .gt. 0) 
 !         write(*,*) "ntot: ", ntot 
 !         stop 
+    
+        ! Calculate domain boundaries to apply limits 
+        xmin = minval(x) 
+        xmax = maxval(x) 
+        ymin = minval(y) 
+        ymax = maxval(y) 
 
         do i = 1, count(p .gt. 0.0)
             ij = maxloc(p,mask=p.gt.0.0)
@@ -357,6 +364,11 @@ contains
                     now%id(j)  = par%id_max 
                     now%x(j) = x(ij(1)) + jit(1,k)
                     now%y(j) = y(ij(2)) + jit(2,k)
+                    
+                    if (now%x(j) .lt. xmin) now%x(j) = xmin 
+                    if (now%x(j) .gt. xmax) now%x(j) = xmax 
+                    if (now%y(j) .lt. ymin) now%y(j) = ymin 
+                    if (now%y(j) .gt. ymax) now%y(j) = ymax 
                     
                     p(ij(1),ij(2)) = 0.0 
 
@@ -374,16 +386,25 @@ contains
 
     end subroutine tracer_activate 
 
-    subroutine tracer_deactivate(par,now)
+    subroutine tracer_deactivate(par,now,x,y)
         ! Use this to deactivate individual or multiple tracers
         implicit none 
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
+        real(prec), intent(IN) :: x(:), y(:) 
 
+        ! Deactivate points where:
+        !  - Thickness of ice sheet at point's location is below threshold
+        !  - Point is past maximum depth into the ice sheet 
+        !  - Velocity of point is higher than maximum threshold 
+        !  - x/y position is out of boundaries of the domain 
         where (now%active .gt. 0 .and. &
                 (now%H .lt. par%H_min .or. &
-                 sqrt(now%ux**2 + now%uy**2) .gt. par%U_max) ) 
+                (now%H - now%z)/now%H .ge. par%depth_max       .or. &
+                sqrt(now%ux**2 + now%uy**2) .gt. par%U_max     .or. &
+                now%x .lt. minval(x) .or. now%x .gt. maxval(x) .or. &
+                now%y .lt. minval(y) .or. now%y .gt. maxval(y)) ) 
 
             now%active    = 0 
 
@@ -496,16 +517,18 @@ contains
             do i = 1, nx
                 if (x(i) .gt. now%x(k)) exit
             end do
-            if ( i .gt. 1 ) then 
+            if (i .gt. nx) then 
+                i = nx
+            else if (i .gt. 1) then
                 if ( (now%x(k)-x(i-1))/(x(i)-x(i-1)) .lt. 0.5 ) i = i-1
             end if
 
             do j = 1, ny
-                write(*,*) j, y(j), now%y(k)
                 if (y(j) .gt. now%y(k)) exit
             end do
-            if ( j .gt. 1 ) then
-                write(*,*) j, j-1, ny  
+            if (j .gt. ny) then
+                j = ny 
+            else if (i .gt. 1) then
                 if ( (now%y(k)-y(j-1))/(y(j)-y(j-1)) .lt. 0.5 ) j = j-1
             end if
 
@@ -539,7 +562,7 @@ contains
         type(tracer_par_class), intent(OUT) :: par 
         logical, intent(IN) :: is_sigma 
 
-        par%n         = 5000
+        par%n         = 10000
         par%n_max_dep = 500
         par%n_active  = 0 
 
@@ -549,7 +572,7 @@ contains
         par%time_old = 0.0 
         par%dt       = 0.0 
 
-        par%thk_min   = 1e-2   ! m 
+        par%thk_min   = 1e-2   ! m (minimum thickness of tracer 'layer')
         par%H_min     = 1500.0 ! m 
         par%depth_max = 0.99   ! fraction of thickness
         par%U_max     = 200.0  ! m/a 
@@ -587,7 +610,7 @@ contains
         allocate(now%H(n))
 
         ! Allocate deposition properties 
-        allocate(dep%id(n))
+        
         allocate(dep%time(n), dep%H(n))
         allocate(dep%x(n), dep%y(n), dep%z(n), dep%lon(n), dep%lat(n))
         allocate(dep%t2m(4,n), dep%pr(4,n), dep%t2m_prann(n))
@@ -815,6 +838,8 @@ contains
         real(prec) :: time_in  
         character(len=512) :: path_out 
 
+        real(prec) :: tmp(size(trc%now%x))
+
         path_out = trim(fldr)//"/"//trim(filename)
 
         ! Determine which timestep this is
@@ -824,9 +849,14 @@ contains
         if (time_in .ne. MV .and. abs(time-time_in).gt.1e-2) nt = nt+1 
 
         call nc_write(path_out,"time",time,dim1="time",start=[nt],count=[1],missing_value=MV)
-        call nc_write(path_out,"x",trc%now%x*1e-3,dim1="pt",dim2="time", missing_value=MV, &
+        
+        tmp = trc%now%x
+        where(trc%now%x .ne. MV) tmp = trc%now%x*1e-3
+        call nc_write(path_out,"x",tmp,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
-        call nc_write(path_out,"y",trc%now%y*1e-3,dim1="pt",dim2="time", missing_value=MV, &
+        tmp = trc%now%y
+        where(trc%now%y .ne. MV) tmp = trc%now%y*1e-3
+        call nc_write(path_out,"y",tmp,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"z",trc%now%z,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
@@ -843,6 +873,12 @@ contains
         call nc_write(path_out,"H",trc%now%H,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
 
+        call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(MV), &
+                        start=[1,nt],count=[trc%par%n ,1])
+
+        ! Write deposition information
+        call nc_write(path_out,"dep_time",trc%dep%time,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
 
         return 
 
