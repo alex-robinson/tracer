@@ -2,6 +2,7 @@
 module tracer_interp 
 
     use tracer_precision 
+    use bspline_module 
 
     implicit none 
 
@@ -22,6 +23,8 @@ module tracer_interp
     public :: interp_bilinear_weights, interp_bilinear 
     public :: interp_trilinear_weights, interp_trilinear  
 
+    public :: interp_bspline3D_weights, interp_bspline3D
+    
 contains 
 
     subroutine calc_interp_linear_weights(idx1,idx2,alpha,x,xout)
@@ -88,7 +91,7 @@ contains
 
         ! Define left index too 
         idx1 = idx2 - 1 
-        
+
         return 
 
     end subroutine calc_interp_linear_weights_ascending
@@ -250,6 +253,62 @@ contains
         return 
 
     end function interp_trilinear
+
+
+    ! === bspline interface ===
+
+
+    subroutine interp_bspline3D_weights(bspl3D,x,y,z,var)
+
+        implicit none 
+
+        type(bspline_3d), intent(INOUT) :: bspl3D 
+        real(prec),       intent(IN)    :: x(:), y(:), z(:)
+        real(prec),       intent(IN)    :: var(:,:,:)
+
+        ! Local variables
+        integer :: bspline_flag 
+
+        call bspl3D%initialize(dble(x),dble(y),dble(z),dble(var),kx=4,ky=4,kz=4,iflag=bspline_flag)
+        
+        if (bspline_flag .ne. 0) then 
+            write(*,*) "interp_bspline3D_weights:: error initializing."
+            stop 
+        end if     
+
+        return 
+
+    end subroutine interp_bspline3D_weights 
+
+    function interp_bspline3D(bspl3D,x,y,z) result(var)
+
+        implicit none 
+
+        type(bspline_3d), intent(INOUT) :: bspl3D 
+        real(prec),       intent(IN)    :: x, y, z
+        real(prec)                      :: var
+
+        ! Local variables
+        integer :: idx, idy, idz 
+        integer :: bspline_flag 
+        double precision :: var_dbl 
+
+        idx = 0 
+        idy = 0 
+        idz = 0 
+
+        call bspl3D%evaluate(dble(x),dble(y),dble(z),idx,idy,idz,var_dbl,bspline_flag)
+
+        if (bspline_flag .ne. 0) then 
+            write(*,*) "interp_bspline3D:: error interpolating."
+            stop 
+        end if     
+
+        var = var_dbl 
+        
+        return 
+
+    end function interp_bspline3D
 
 
 end module tracer_interp 

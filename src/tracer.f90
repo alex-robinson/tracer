@@ -3,7 +3,7 @@ module tracer
 
     use tracer_precision
     use tracer_interp 
-    use bspline_module 
+    use bspline_module, only : bspline_3d 
     use ncio   
     use nml 
 
@@ -70,7 +70,6 @@ module tracer
 
     type(lin3_interp_par_type) :: par_lin 
     type(bspline_3d)           :: bspline3d_ux, bspline3d_uy, bspline3d_uz 
-    integer                    :: bspline_flag 
 
     private 
 
@@ -126,20 +125,8 @@ contains
         ! Initialize the time 
         trc%par%time_now  = time 
 
-
-        ! Method 
-        trc%par%interp_method = "spline"    ! "linear" or "spline"
-
         ! Initialize random number generator 
         call random_seed() 
-
-
-        ! Consistency checks 
-        if (trim(trc%par%interp_method) .ne. "linear" .or. &
-            trim(trc%par%interp_method) .ne. "spline" ) then 
-            write(*,*) "tracer_init:: error: interp_method must be 'linear' &
-            &or 'spline': "//trim(trc%par%interp_method)
-        end if 
 
         return 
 
@@ -204,11 +191,8 @@ contains
             ksrf  = 1 
         end if
 
-        if (trim(par%interp_method) .eq. "spline") then  
-            call bspline3d_ux%initialize(dble(x1),dble(y1),dble(z1),dble(ux1),kx=4,ky=4,kz=4,iflag=bspline_flag)
-            call bspline3d_uy%initialize(dble(x1),dble(y1),dble(z1),dble(uy1),kx=4,ky=4,kz=4,iflag=bspline_flag)
-            call bspline3d_uz%initialize(dble(x1),dble(y1),dble(z1),dble(uz1),kx=4,ky=4,kz=4,iflag=bspline_flag)
-            
+        if (trim(par%interp_method) .eq. "spline") then
+
             ! Allocate z-velocity field in sigma coordinates 
             if (allocated(usig1)) deallocate(usig1)
             allocate(usig1(nx,ny,nz))
@@ -217,9 +201,13 @@ contains
             do k = 1, nz 
                 where (H .gt. 0.0) usig1(:,:,k) = uz1(:,:,k) / H
             end do 
+
+            call interp_bspline3D_weights(bspline3d_ux,x1,y1,z1,ux1)
+            call interp_bspline3D_weights(bspline3d_uy,x1,y1,z1,uy1)
+            call interp_bspline3D_weights(bspline3d_uz,x1,y1,z1,usig1)
+            
         end if 
 
-        stop 
 
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, par%n 
@@ -259,7 +247,10 @@ contains
 
                 else
                     ! Spline interpolation 
-                    
+                    now%ux(i) = interp_bspline3D(bspline3d_ux,now%x(i),now%y(i),now%z(i)/now%H(i))
+                    now%uy(i) = interp_bspline3D(bspline3d_uy,now%x(i),now%y(i),now%z(i)/now%H(i))
+                    now%uz(i) = interp_bspline3D(bspline3d_uz,now%x(i),now%y(i),now%z(i)/now%H(i)) *now%H(i)  ! sigma => m
+
                 end if 
 
                 now%T(i)   = 260.0 
@@ -609,8 +600,8 @@ contains
         type(tracer_par_class), intent(OUT) :: par 
         logical, intent(IN) :: is_sigma 
 
-        par%n         = 10000
-        par%n_max_dep = 500
+        par%n         = 5000
+        par%n_max_dep = 100
         par%n_active  = 0 
 
         par%is_sigma  = is_sigma 
@@ -624,12 +615,23 @@ contains
         par%depth_max = 0.99   ! fraction of thickness
         par%U_max     = 200.0  ! m/a 
 
-        par%H_min_dep = 2000.0 ! m 
+        par%H_min_dep = 1000.0 ! m 
         par%alpha     = 1.0 
         par%dist      = "linear"
         
         par%dens_z_lim = 50.0 ! m
         par%dens_max   = 10   ! Number of points
+
+        ! Method 
+        par%interp_method = "linear"    ! "linear" or "spline"
+
+
+        ! Consistency checks 
+        if (trim(par%interp_method) .ne. "linear" .or. &
+            trim(par%interp_method) .ne. "spline" ) then 
+            write(*,*) "tracer_init:: error: interp_method must be 'linear' &
+            &or 'spline': "//trim(par%interp_method)
+        end if 
 
         return 
 

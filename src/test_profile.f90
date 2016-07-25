@@ -41,7 +41,7 @@ program tracertest
     ! Test tracer_update
     time     = 0.0 
     time_end = 160000.0
-    dt       = 1.0 
+    dt       = 10.0 
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)

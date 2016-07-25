@@ -145,13 +145,13 @@ obj_tracer =    $(objdir)/nml.o    \
 				   
 ## Complete programs
 
-test: $(obj_tracer) $(obj_bspline)
+test: $(obj_bspline) $(obj_tracer) 
 	$(FC) $(DFLAGS) $(FLAGS) -o test_greenland.x $^ $(srcdir)/test_greenland.f90 $(LFLAGS)
 	@echo " "
 	@echo "    test_greenland.x is ready."
 	@echo " "
 
-test_profile: $(obj_tracer) $(obj_bspline)
+test_profile: $(obj_bspline) $(obj_tracer) 
 	$(FC) $(DFLAGS) $(FLAGS) -o test_profile.x $^ $(srcdir)/test_profile.f90 $(LFLAGS)
 	@echo " "
 	@echo "    test_profile.x is ready."
