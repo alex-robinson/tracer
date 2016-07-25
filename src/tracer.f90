@@ -3,6 +3,7 @@ module tracer
 
     use tracer_precision
     use tracer_interp 
+    use bspline_module 
     use ncio   
     use nml 
 
@@ -23,6 +24,7 @@ module tracer
         real(prec) :: dens_z_lim                ! Distance from surface to count density
         integer    :: dens_max                  ! Max allowed density of particles at surface
         
+        character(len=56) :: interp_method 
     end type 
 
     type tracer_state_class 
@@ -67,6 +69,8 @@ module tracer
     end type 
 
     type(lin3_interp_par_type) :: par_lin 
+    type(bspline_3d)           :: bspline3d_ux, bspline3d_uy, bspline3d_uz 
+    integer                    :: bspline_flag 
 
     private 
 
@@ -122,8 +126,20 @@ contains
         ! Initialize the time 
         trc%par%time_now  = time 
 
+
+        ! Method 
+        trc%par%interp_method = "spline"    ! "linear" or "spline"
+
         ! Initialize random number generator 
         call random_seed() 
+
+
+        ! Consistency checks 
+        if (trim(trc%par%interp_method) .ne. "linear" .or. &
+            trim(trc%par%interp_method) .ne. "spline" ) then 
+            write(*,*) "tracer_init:: error: interp_method must be 'linear' &
+            &or 'spline': "//trim(trc%par%interp_method)
+        end if 
 
         return 
 
@@ -147,10 +163,12 @@ contains
         character(len=3) :: idx_order 
         real(prec) :: zc(size(z))   ! Actual cartesian z-axis after applying sigma*H
         real(prec) :: z_srf_now  
-        integer    :: i, ny, nz, ksrf, kbase  
+        integer    :: i, j, k, nx, ny, nz, ksrf, kbase  
         real(prec), allocatable :: x1(:), y1(:), z1(:)
         real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
         logical :: z_descending 
+
+        real(prec), allocatable :: usig1(:,:,:)
 
         ! Update current time 
         par%time_old = par%time_now 
@@ -176,12 +194,32 @@ contains
         ! Determine size of y-axis, if it is one, this is a 2D profile domain
         ny = size(y1,1)
 
+        ! Get nx for completeness 
+        nx = size(x1,1)
+
         kbase = 1
         ksrf = nz 
         if (z_descending) then 
             kbase = nz 
             ksrf  = 1 
         end if
+
+        if (trim(par%interp_method) .eq. "spline") then  
+            call bspline3d_ux%initialize(dble(x1),dble(y1),dble(z1),dble(ux1),kx=4,ky=4,kz=4,iflag=bspline_flag)
+            call bspline3d_uy%initialize(dble(x1),dble(y1),dble(z1),dble(uy1),kx=4,ky=4,kz=4,iflag=bspline_flag)
+            call bspline3d_uz%initialize(dble(x1),dble(y1),dble(z1),dble(uz1),kx=4,ky=4,kz=4,iflag=bspline_flag)
+            
+            ! Allocate z-velocity field in sigma coordinates 
+            if (allocated(usig1)) deallocate(usig1)
+            allocate(usig1(nx,ny,nz))
+
+            usig1 = 0.0
+            do k = 1, nz 
+                where (H .gt. 0.0) usig1(:,:,k) = uz1(:,:,k) / H
+            end do 
+        end if 
+
+        stop 
 
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, par%n 
@@ -195,6 +233,7 @@ contains
                 ! 3. Calculate lin weights for z values 
                 ! 4. Perform trilinear interpolation 
 
+                ! Linear interpolation used for surface position 
                 par_lin    = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
                 now%H(i)   = interp_bilinear(par_lin,H)
                 z_srf_now  = interp_bilinear(par_lin,z_srf)
@@ -203,17 +242,25 @@ contains
                 ! (z_bedrock + ice thickness)
                 zc = (z_srf_now-now%H(i)) + z1*now%H(i)
 
-                par_lin = interp_trilinear_weights(x1,y1,zc,xout=now%x(i),yout=now%y(i),zout=now%z(i))
+                if (trim(par%interp_method) .eq. "linear") then 
+                    ! Trilinear interpolation 
 
-                now%ux(i)  = interp_trilinear(par_lin,ux1)
-                now%uy(i)  = interp_trilinear(par_lin,uy1)
-                now%uz(i)  = interp_trilinear(par_lin,uz1)
+                    par_lin = interp_trilinear_weights(x1,y1,zc,xout=now%x(i),yout=now%y(i),zout=now%z(i))
 
-!                 now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
-!                 now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
-!                 now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
-!                 ! Until trilinear interp is ready, maintain z-position at surface
-!                 now%z(i)   = interp_bilinear(par_lin,z_srf)
+                    now%ux(i)  = interp_trilinear(par_lin,ux1)
+                    now%uy(i)  = interp_trilinear(par_lin,uy1)
+                    now%uz(i)  = interp_trilinear(par_lin,uz1)
+
+    !                 now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
+    !                 now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
+    !                 now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
+    !                 ! Until trilinear interp is ready, maintain z-position at surface
+    !                 now%z(i)   = interp_bilinear(par_lin,z_srf)
+
+                else
+                    ! Spline interpolation 
+                    
+                end if 
 
                 now%T(i)   = 260.0 
                 now%thk(i) = 0.3 

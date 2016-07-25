@@ -14,6 +14,7 @@ program tracertest
     integer :: k, kmax, q 
     real(4) :: time, time_end, dt  
     integer :: i0, i1 
+    real(4) :: dt_write 
 
     type profile_class 
         integer :: nx, nz
@@ -28,7 +29,7 @@ program tracertest
 
     ! Limit x-direction of domain to close to ice divide (x=0) to minimize 
     ! computations for checking comparison
-    i1 = 5 
+    i1 = 51 
 
     call calc_profile_RH2003(prof1,i1)
     call profile_write(prof1,fldr="output",filename="profile_RH2003.nc")
@@ -40,13 +41,13 @@ program tracertest
     ! Test tracer_update
     time     = 0.0 
     time_end = 160000.0
-    dt       = 50.0 
+    dt       = 1.0 
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,filename)
 
-    q = 9 
+    dt_write = 0.0
 
     do k = 1, int(time_end/dt) 
 
@@ -57,10 +58,10 @@ program tracertest
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
                              ux=prof1%ux,uz=prof1%uz)
 
-        q = q+1 
-        if (q==10) then 
+        if (k .gt. 1) dt_write = dt_write+dt 
+        if (dt_write .eq. 0.0 .or. dt_write .ge. 5000.0) then 
             call tracer2D_write(trc1,time,fldr,filename)
-            q = 0 
+            dt_write = 0.0 
         end if 
 
     end do 
@@ -138,9 +139,9 @@ contains
         prof%dHdx = 0.0
 
         ! Calculate velocities 
-        do i = 2, prof%nx
-!             dHdx = (prof%H(i+1)-prof%H(i))/(prof%xc(i+1)-prof%xc(i))
-            dHdx = (prof%H(i)-prof%H(i-1))/(prof%xc(i)-prof%xc(i-1))
+        do i = 1, prof%nx-1
+            dHdx = (prof%H(i+1)-prof%H(i))/(prof%xc(i+1)-prof%xc(i))
+!             dHdx = (prof%H(i)-prof%H(i-1))/(prof%xc(i)-prof%xc(i-1))
             prof%dHdx(i) = dHdx
             H    = prof%H(i) 
             do j = 1, prof%nz

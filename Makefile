@@ -120,6 +120,22 @@ $(objdir)/tracer.o: $(srcdir)/tracer.f90 $(objdir)/tracer_precision.o $(objdir)/
 $(objdir)/tracer2D.o: $(srcdir)/tracer2D.f90 $(objdir)/tracer.o $(objdir)/tracer_precision.o $(objdir)/ncio.o
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
+## bspline-fortran #####
+$(objdir)/bspline_sub_module.o: $(libdir)/bspline-fortran/bspline_sub_module.f90
+	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
+
+$(objdir)/bspline_oo_module.o: $(libdir)/bspline-fortran/bspline_oo_module.f90
+	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
+
+$(objdir)/bspline_module.o: $(libdir)/bspline-fortran/bspline_module.f90 $(objdir)/bspline_sub_module.o $(objdir)/bspline_oo_module.o
+	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
+
+obj_bspline =   $(objdir)/bspline_sub_module.o    \
+				$(objdir)/bspline_oo_module.o   \
+				$(objdir)/bspline_module.o
+
+#########################
+
 obj_tracer =    $(objdir)/nml.o    \
 				$(objdir)/ncio.o   \
 				$(objdir)/tracer_precision.o \
@@ -129,13 +145,13 @@ obj_tracer =    $(objdir)/nml.o    \
 				   
 ## Complete programs
 
-test: $(obj_tracer) 
+test: $(obj_tracer) $(obj_bspline)
 	$(FC) $(DFLAGS) $(FLAGS) -o test_greenland.x $^ $(srcdir)/test_greenland.f90 $(LFLAGS)
 	@echo " "
 	@echo "    test_greenland.x is ready."
 	@echo " "
 
-test_profile: $(obj_tracer) 
+test_profile: $(obj_tracer) $(obj_bspline)
 	$(FC) $(DFLAGS) $(FLAGS) -o test_profile.x $^ $(srcdir)/test_profile.f90 $(LFLAGS)
 	@echo " "
 	@echo "    test_profile.x is ready."
