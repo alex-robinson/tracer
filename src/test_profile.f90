@@ -25,49 +25,49 @@ program tracertest
 
     type(profile_class) :: prof1 
 
-    call calc_profile_RH2013(prof1)
-    call profile_write(prof1,fldr="output",filename="profile_RH2013.nc")
+    call calc_profile_RH2003(prof1)
+    call profile_write(prof1,fldr="output",filename="profile_RH2003.nc")
 
     fldr     = "output"
-    filename       = "profile_RH2013_trc1.nc"
-    filename_stats = "profile_RH2013_trc1-stats.nc"
+    filename       = "profile_RH2003_trc1.nc"
+    filename_stats = "profile_RH2003_trc1-stats.nc"
 
     ! Test tracer_update
     time     = 0.0 
     time_end = 1002.0
     dt       = 1.0 
 
-    ! Initialize tracer and output file 
-    call tracer2D_init(trc1,time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)
-    call tracer2D_write_init(trc1,fldr,filename)
+!     ! Initialize tracer and output file 
+!     call tracer2D_init(trc1,time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)
+!     call tracer2D_write_init(trc1,fldr,filename)
 
-    q = 9 
+!     q = 9 
 
-    do k = 1, int(time_end/dt), int(dt) 
+!     do k = 1, int(time_end/dt), int(dt) 
 
-        if (k .gt. 1) time = time + dt 
-        write(*,*) "time = ", time, trc1%par%n_active
+!         if (k .gt. 1) time = time + dt 
+!         write(*,*) "time = ", time, trc1%par%n_active
 
-        call tracer2D_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
-                             x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
-                             ux=prof1%ux,uz=prof1%uz)
+!         call tracer2D_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
+!                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
+!                              ux=prof1%ux,uz=prof1%uz)
 
-        q = q+1 
-        if (q==10) then 
-            call tracer2D_write(trc1,time,fldr,filename)
-            q = 0 
-        end if 
+!         q = q+1 
+!         if (q==10) then 
+!             call tracer2D_write(trc1,time,fldr,filename)
+!             q = 0 
+!         end if 
 
-    end do 
+!     end do 
 
-    ! Write stats 
-    call tracer2D_write_stats(trc1,time,fldr,filename_stats)
+!     ! Write stats 
+!     call tracer2D_write_stats(trc1,time,fldr,filename_stats)
 
 contains 
 
-    subroutine calc_profile_RH2013(prof)
+    subroutine calc_profile_RH2003(prof)
         ! Define a 2D profile (x-z) following 
-        ! Rybak and Huybrechts (2013, Annals of Glaciology)
+        ! Rybak and Huybrechts (2003, Annals of Glaciology)
 
         implicit none 
 
@@ -147,7 +147,7 @@ contains
         end do 
 
         ! Calculate analytical age at the divide
-        prof%age = (H0/G)*log(prof%sigma)
+        prof%age = (H0/GG)*log(prof%sigma)
         prof%age(1) = prof%age(2)
         
 
@@ -160,7 +160,7 @@ contains
 
         return 
 
-    end subroutine calc_profile_RH2013
+    end subroutine calc_profile_RH2003
 
     subroutine profile_write(prof,fldr,filename)
 

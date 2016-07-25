@@ -149,7 +149,7 @@ contains
         character(len=3) :: idx_order 
         real(prec) :: zc(size(z))   ! Actual cartesian z-axis after applying sigma*H
         real(prec) :: z_srf_now  
-        integer    :: i, nz, ksrf, kbase  
+        integer    :: i, ny, nz, ksrf, kbase  
         real(prec), allocatable :: x1(:), y1(:), z1(:)
         real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
         logical :: z_descending 
@@ -175,6 +175,9 @@ contains
         z_descending = .FALSE. 
         if (z1(1) .gt. z1(nz)) z_descending = .TRUE. 
 
+        ! Determine size of y-axis, if it is one, this is a 2D profile domain
+        ny = size(y1,1)
+
         kbase = 1
         ksrf = nz 
         if (z_descending) then 
@@ -193,8 +196,8 @@ contains
                 ! 2. Get H and z-axis at that location
                 ! 3. Calculate lin weights for z values 
                 ! 4. Perform trilinear interpolation 
-
-                par_lin = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
+                
+                par_lin    = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
                 now%H(i)   = interp_bilinear(par_lin,H)
                 z_srf_now  = interp_bilinear(par_lin,z_srf)
 
@@ -248,7 +251,7 @@ contains
                 now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,ksrf))
                 now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,ksrf))
                 now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,ksrf)) 
-                
+
                 ! Assign deposition quantities
                 now%T(i)   = 260.0 
                 now%thk(i) = 0.3 
@@ -327,7 +330,13 @@ contains
         call random_number(jit)
         jit = (jit - 0.5)
         jit(1,:) = jit(1,:)*(x(2)-x(1)) 
-        jit(2,:) = jit(2,:)*(y(2)-y(1)) 
+
+        if (size(y,1) .gt. 1) then 
+            jit(2,:) = jit(2,:)*(y(2)-y(1)) 
+        else 
+            jit(2,:) = 0.0 
+        end if 
+
 
 !         write(*,*) "range jit: ", minval(jit), maxval(jit)
 !         write(*,*) "npts: ", count(npts .gt. 0) 
@@ -487,13 +496,19 @@ contains
             do i = 1, nx
                 if (x(i) .gt. now%x(k)) exit
             end do
-            if ( (now%x(k)-x(i-1))/(x(i)-x(i-1)) .lt. 0.5 ) i = i-1
-            
+            if ( i .gt. 1 ) then 
+                if ( (now%x(k)-x(i-1))/(x(i)-x(i-1)) .lt. 0.5 ) i = i-1
+            end if
+
             do j = 1, ny
+                write(*,*) j, y(j), now%y(k)
                 if (y(j) .gt. now%y(k)) exit
             end do
-            if ( (now%y(k)-y(j-1))/(y(j)-y(j-1)) .lt. 0.5 ) j = j-1
-            
+            if ( j .gt. 1 ) then
+                write(*,*) j, j-1, ny  
+                if ( (now%y(k)-y(j-1))/(y(j)-y(j-1)) .lt. 0.5 ) j = j-1
+            end if
+
             if (abs(z_srf(i,j)-now%z(k)) .lt. par%dens_z_lim) then
                 ! If point is near surface, add it to density
                dens(i,j) = dens(i,j)+1

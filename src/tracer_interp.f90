@@ -88,7 +88,7 @@ contains
 
         ! Define left index too 
         idx1 = idx2 - 1 
-
+        
         return 
 
     end subroutine calc_interp_linear_weights_ascending
@@ -191,7 +191,8 @@ contains
 
         varout = MV 
 
-        if (par%i1 .gt. 0 .and. par%j1 .gt. 0) then
+        if (par%i1 .gt. 0 .and. par%j1 .gt. 0 .and. &
+            par%i2 .gt. 0 .and. par%j2 .gt. 0) then
 
             i1 = par%i1
             i2 = par%i2  
@@ -221,7 +222,8 @@ contains
 
         varout = MV 
 
-        if (par%i1 .gt. 0 .and. par%j1 .gt. 0 .and. par%k1 .gt. 0) then
+        if (par%i1 .gt. 0 .and. par%j1 .gt. 0 .and. par%k1 .gt. 0 .and. &
+            par%i2 .gt. 0 .and. par%j2 .gt. 0 .and. par%k2 .gt. 0) then
 
             i1 = par%i1
             i2 = par%i2
@@ -232,7 +234,7 @@ contains
 
             ! Lower z-plane 
             p1 = var(i1,j1,k1) + par%alpha_x*(var(i2,j1,k1)-var(i1,j1,k1))
-            p2 = var(i1,j2,k1)   + par%alpha_x*(var(i2,j2,k1)-var(i1,j2,k1))
+            p2 = var(i1,j2,k1) + par%alpha_x*(var(i2,j2,k1)-var(i1,j2,k1))
             v1 = p1 + par%alpha_y*(p2-p1)
 
             ! Upper z-plane 
