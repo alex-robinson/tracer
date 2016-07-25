@@ -31,7 +31,7 @@ program tracertest
     ! computations for checking comparison
     i1 = 51 
 
-    call calc_profile_RH2003(prof1,i1)
+    call calc_profile_RH2003(prof1)
     call profile_write(prof1,fldr="output",filename="profile_RH2003.nc")
 
     fldr     = "output"
@@ -44,7 +44,7 @@ program tracertest
     dt       = 10.0 
 
     ! Initialize tracer and output file 
-    call tracer2D_init(trc1,time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)
+    call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,filename)
 
     dt_write = 0.0
@@ -100,8 +100,9 @@ contains
 
         prof%nz = nz
         prof%nx = nx    ! Right-hand side symmetrical of domain
-        
-        if (present(i1)) prof%nx = i1
+!         prof%nx = nx+50 ! Whole domain 
+
+!         if (present(i1)) prof%nx = i1
 
         allocate(prof%xc(prof%nx))
         allocate(prof%sigma(prof%nz))
@@ -113,12 +114,20 @@ contains
         allocate(prof%ux(prof%nx,prof%nz))
         allocate(prof%uz(prof%nx,prof%nz))
 
-        allocate(prof%age(prof%nz))
+        allocate(prof%age(prof%nz)) 
 
-        ! Define x-dimension (0-1000 km)
-        do i = 1, prof%nx 
-            prof%xc(i) = 0.0 + (i-1)/real(nx-1) * 1000.0 
-        end do 
+        if (prof%nx .lt. 100) then
+            ! Define x-dimension (0-1000 km) 
+            do i = 1, prof%nx 
+                prof%xc(i) = 0.0 + (i-1)/real(nx-1) * 1000.0 
+            end do
+        else
+            ! Define x-dimension (1000-1000 km)
+            do i = 1, prof%nx 
+                prof%xc(i) = -1000.0 + (i-1)/real(nx-1) * 1000.0 
+            end do 
+        end if 
+
         prof%xc = prof%xc*1e3   ! [km] => [m] 
 
         ! Define z-dimension (0-1 sigma)
@@ -131,7 +140,7 @@ contains
         H0 = (20.0*M/A)**(1.0/(2.0*(ng+1)))*(1/(rho*g))**(ng/(2.0*(ng+1)))*L**(1.0/2.0)
         
         ! Calculate H(x) 
-        prof%H = H0 * (1.0-(prof%xc/L)**((ng+1.0)/ng))**(real(ng)/(2.0*(ng+1.0)))
+        prof%H = H0 * (1.0-(abs(prof%xc)/L)**((ng+1.0)/ng))**(real(ng)/(2.0*(ng+1.0)))
 
         prof%ux   = 0.0 
         prof%uz   = 0.0 
@@ -143,6 +152,7 @@ contains
             dHdx = (prof%H(i+1)-prof%H(i))/(prof%xc(i+1)-prof%xc(i))
 !             dHdx = (prof%H(i)-prof%H(i-1))/(prof%xc(i)-prof%xc(i-1))
             prof%dHdx(i) = dHdx
+
             H    = prof%H(i) 
             do j = 1, prof%nz
 
@@ -164,7 +174,7 @@ contains
 !         write(*,"(a,500f8.2)") "sigma: ", prof%sigma 
 !         write(*,"(a,f10.2)") "H0 = ", H0 
 !         write(*,"(a,2f10.2)") "range(ux): ", minval(prof%ux), maxval(prof%ux)
-!         write(*,"(a,2f10.2)") "range(uz): ", minval(prof%uz), maxval(prof%uz)
+!         write(*,"(a,2f10.2)") "range(uz): ", minval(prof%uz), maxval(prof%uz) 
 
         return 
 

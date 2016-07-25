@@ -89,18 +89,19 @@ module tracer
 
 contains 
 
-    subroutine tracer_init(trc,time,x,y,z,is_sigma)
+    subroutine tracer_init(trc,filename,time,x,y,z,is_sigma)
 
         implicit none 
 
         type(tracer_class),   intent(OUT) :: trc 
+        character(len=*),     intent(IN)  :: filename 
         real(prec), intent(IN) :: x(:), y(:), z(:)
         logical,    intent(IN) :: is_sigma 
 
         real(4) :: time 
 
         ! Load the parameters
-        call tracer_par_load(trc%par,is_sigma)
+        call tracer_par_load(trc%par,filename,is_sigma)
 
         ! Allocate the state variables 
         call tracer_allocate(trc%now,trc%dep,n=trc%par%n)
@@ -593,38 +594,48 @@ contains
     !
     ! ================================================
 
-    subroutine tracer_par_load(par,is_sigma)
+    subroutine tracer_par_load(par,filename,is_sigma)
 
         implicit none 
 
         type(tracer_par_class), intent(OUT) :: par 
+        character(len=*),       intent(IN)  :: filename 
         logical, intent(IN) :: is_sigma 
 
-        par%n         = 5000
-        par%n_max_dep = 100
-        par%n_active  = 0 
-
-        par%is_sigma  = is_sigma 
-
-        par%time_now = 0.0 
-        par%time_old = 0.0 
-        par%dt       = 0.0 
-
-        par%thk_min   = 1e-2   ! m (minimum thickness of tracer 'layer')
-        par%H_min     = 1500.0 ! m 
-        par%depth_max = 0.99   ! fraction of thickness
-        par%U_max     = 200.0  ! m/a 
-
-        par%H_min_dep = 1000.0 ! m 
-        par%alpha     = 1.0 
-        par%dist      = "linear"
+!         par%n         = 5000
+!         par%n_max_dep = 100
         
-        par%dens_z_lim = 50.0 ! m
-        par%dens_max   = 10   ! Number of points
+!         par%thk_min   = 1e-2   ! m (minimum thickness of tracer 'layer')
+!         par%H_min     = 1500.0 ! m 
+!         par%depth_max = 0.99   ! fraction of thickness
+!         par%U_max     = 200.0  ! m/a 
 
-        ! Method 
-        par%interp_method = "linear"    ! "linear" or "spline"
-
+!         par%H_min_dep = 1000.0 ! m 
+!         par%alpha     = 1.0 
+!         par%dist      = "linear"
+        
+!         par%dens_z_lim = 50.0 ! m
+!         par%dens_max   = 10   ! Number of points
+        
+        call nml_read(filename,"tracer_par","n",            par%n)
+        call nml_read(filename,"tracer_par","n_max_dep",    par%n_max_dep)
+        call nml_read(filename,"tracer_par","thk_min",      par%thk_min)
+        call nml_read(filename,"tracer_par","H_min",        par%H_min)
+        call nml_read(filename,"tracer_par","depth_max",    par%depth_max)
+        call nml_read(filename,"tracer_par","U_max",        par%U_max)
+        call nml_read(filename,"tracer_par","H_min_dep",    par%H_min_dep)
+        call nml_read(filename,"tracer_par","alpha",        par%alpha)
+        call nml_read(filename,"tracer_par","dist",         par%dist)
+        call nml_read(filename,"tracer_par","dens_z_lim",   par%dens_z_lim)
+        call nml_read(filename,"tracer_par","dens_max",     par%dens_max)
+        call nml_read(filename,"tracer_par","interp_method",par%interp_method)
+        
+        ! Define additional parameter values
+        par%is_sigma  = is_sigma 
+        par%n_active  = 0 
+        par%time_now  = 0.0             ! year
+        par%time_old  = 0.0             ! year
+        par%dt        = 0.0             ! year
 
         ! Consistency checks 
         if (trim(par%interp_method) .ne. "linear" .or. &
