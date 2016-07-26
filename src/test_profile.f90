@@ -11,11 +11,6 @@ program tracertest
     type(tracer_class) :: trc1
     character(len=128) :: fldr, filename, filename_stats 
 
-    integer :: k, kmax, q 
-    real(4) :: time, time_end, dt  
-    integer :: i0, i1 
-    real(4) :: dt_write 
-
     type profile_class 
         integer :: nx, nz
         integer, allocatable :: dims(:) 
@@ -26,7 +21,15 @@ program tracertest
     end type 
 
     type(profile_class) :: prof1 
+    
+    integer :: k, kmax, q 
+    real(4) :: time, time_end, dt  
+    integer :: i0, i1 
+    real(4) :: dt_write, dt_write_now  
+    logical             :: dep_now 
+    real(prec)          :: dt_dep 
 
+    
     ! Limit x-direction of domain to close to ice divide (x=0) to minimize 
     ! computations for checking comparison
     i1 = 51 
@@ -39,29 +42,37 @@ program tracertest
     filename_stats = "profile_RH2003_trc1-stats.nc"
 
     ! Test tracer_update
-    time     = 0.0 
-    time_end = 160000.0
-    dt       = 10.0 
+    time     = -500000.0 
+    time_end = 0.0
+    dt       = 5.0 
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,filename)
 
-    dt_write = 0.0
+    dt_write = 10000.0 
+    dt_dep   = 200.0 
 
-    do k = 1, int(time_end/dt) 
+    dt_write_now = 0.0 
+
+    do k = 1, int((time_end-time)/dt)+1 
 
         if (k .gt. 1) time = time + dt 
+
+        dep_now  = .FALSE.
+        if (mod(time,dt_dep) .eq. 0.0) dep_now = .TRUE. 
+
         write(*,*) "time = ", time, trc1%par%n_active
+
 
         call tracer2D_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
-                             ux=prof1%ux,uz=prof1%uz)
+                             ux=prof1%ux*0.0,uz=prof1%uz,dep_now=dep_now)
 
-        if (k .gt. 1) dt_write = dt_write+dt 
-        if (dt_write .eq. 0.0 .or. dt_write .ge. 5000.0) then 
+        if (k .gt. 1) dt_write_now = dt_write_now+dt 
+        if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
             call tracer2D_write(trc1,time,fldr,filename)
-            dt_write = 0.0 
+            dt_write_now = 0.0 
         end if 
 
     end do 

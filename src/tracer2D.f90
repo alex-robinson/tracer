@@ -45,7 +45,7 @@ contains
     end subroutine tracer2D_init
 
 
-    subroutine tracer2D_update(par,now,dep,stats,time,x,z,z_srf,H,ux,uz)
+    subroutine tracer2D_update(par,now,dep,stats,time,x,z,z_srf,H,ux,uz,dep_now)
 
         implicit none 
 
@@ -57,7 +57,7 @@ contains
         real(prec), intent(IN) :: x(:), z(:)
         real(prec), intent(IN) :: z_srf(:), H(:)
         real(prec), intent(IN) :: ux(:,:), uz(:,:)
-        
+        logical,    intent(IN) :: dep_now 
         ! Local variables
         real(prec) :: y(2) 
         real(prec), allocatable :: z_srf_2D(:,:), H_2D(:,:)
@@ -84,7 +84,7 @@ contains
         end do 
 
         ! Now update tracers using 3D call 
-        call tracer_update(par,now,dep,stats,time,x,y,z,z_srf_2D,H_2D,ux_3D,uy_3D,uz_3D)
+        call tracer_update(par,now,dep,stats,time,x,y,z,z_srf_2D,H_2D,ux_3D,uy_3D,uz_3D,dep_now)
 
         return 
 
@@ -181,6 +181,8 @@ contains
 
         ! Write deposition information
         call nc_write(path_out,"dep_time",trc%dep%time,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"dep_H",trc%dep%H,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
 
         return 

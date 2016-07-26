@@ -121,6 +121,12 @@ contains
         trc%now%T         = mv 
         trc%now%H         = mv 
 
+        trc%dep%time      = mv 
+        trc%dep%H         = mv 
+        trc%dep%x         = mv 
+        trc%dep%y         = mv 
+        trc%dep%z         = mv 
+
         trc%par%id_max    = 0 
 
         ! Initialize the time 
@@ -133,7 +139,7 @@ contains
 
     end subroutine tracer_init
 
-    subroutine tracer_update(par,now,dep,stats,time,x,y,z,z_srf,H,ux,uy,uz,order)
+    subroutine tracer_update(par,now,dep,stats,time,x,y,z,z_srf,H,ux,uy,uz,dep_now,order)
 
         implicit none 
 
@@ -145,6 +151,7 @@ contains
         real(prec), intent(IN) :: x(:), y(:), z(:)
         real(prec), intent(IN) :: z_srf(:,:), H(:,:)
         real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
+        logical,    intent(IN) :: dep_now 
         character(len=*), optional :: order 
 
         ! Local variables  
@@ -268,10 +275,10 @@ contains
         call calc_position(now%x,now%y,now%z,now%ux,now%uy,now%uz,par%dt,now%active)
 
         ! Destroy points that moved outside the valid region 
-        call tracer_deactivate(par,now,x1,y1)
+        call tracer_deactivate(par,now,x1,y1,maxval(H))
 
-        ! Activate new tracers
-        call tracer_activate(par,now,x1,y1,H=H,nmax=par%n_max_dep)
+        ! Activate new tracers if desired
+        if (dep_now) call tracer_activate(par,now,x1,y1,H=H,nmax=par%n_max_dep)
 
         ! Finish activation for necessary points 
         do i = 1, par%n 
@@ -295,6 +302,10 @@ contains
 
                 ! Define deposition values 
                 dep%time(i) = par%time_now 
+                dep%H(i)    = now%H(i)
+                dep%x(i)    = now%x(i)
+                dep%y(i)    = now%y(i)
+                dep%z(i)    = now%z(i) 
 
                 now%active(i) = 2 
 
@@ -425,25 +436,28 @@ contains
 
     end subroutine tracer_activate 
 
-    subroutine tracer_deactivate(par,now,x,y)
+    subroutine tracer_deactivate(par,now,x,y,Hmax)
         ! Use this to deactivate individual or multiple tracers
         implicit none 
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
         real(prec), intent(IN) :: x(:), y(:) 
+        real(prec), intent(IN) :: Hmax 
 
         ! Deactivate points where:
         !  - Thickness of ice sheet at point's location is below threshold
         !  - Point is past maximum depth into the ice sheet 
+        !  - Point is above maximum ice thickness Hmax (interp error)
         !  - Velocity of point is higher than maximum threshold 
         !  - x/y position is out of boundaries of the domain 
         where (now%active .gt. 0 .and. &
-                (now%H .lt. par%H_min .or. &
+            (   now%H .lt. par%H_min                           .or. &
                 (now%H - now%z)/now%H .ge. par%depth_max       .or. &
+                now%H .gt. Hmax                                .or. &
                 sqrt(now%ux**2 + now%uy**2) .gt. par%U_max     .or. &
                 now%x .lt. minval(x) .or. now%x .gt. maxval(x) .or. &
-                now%y .lt. minval(y) .or. now%y .gt. maxval(y)) ) 
+                now%y .lt. minval(y) .or. now%y .gt. maxval(y) ) ) 
 
             now%active    = 0 
 
@@ -938,6 +952,14 @@ contains
 
         ! Write deposition information
         call nc_write(path_out,"dep_time",trc%dep%time,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"dep_H",trc%dep%H,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"dep_x",trc%dep%x,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"dep_y",trc%dep%y,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"dep_z",trc%dep%z,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
 
         return 

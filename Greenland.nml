@@ -1,0 +1,20 @@
+
+&tracer_par
+    n         = 5000
+    n_max_dep = 100
+
+    thk_min   = 1e-2            ! m (minimum thickness of tracer 'layer')
+    H_min     = 1500.0          ! m 
+    depth_max = 0.99            ! fraction of thickness
+    U_max     = 200.0           ! m/a 
+
+    H_min_dep = 1000.0          ! m 
+    alpha     = 1.0 
+    dist      = "linear"
+
+    dens_z_lim = 50.0           ! m
+    dens_max   = 10             ! Number of points
+
+    ! Method 
+    interp_method = "linear"    ! "linear" or "spline"
+/
