@@ -2,7 +2,8 @@
 .SHELL: /bin/sh
 
 # PATH options
-objdir = .obj
+objdir = libtracer/include
+bindir = libtracer/bin
 libdir = libs
 srcdir = src
 
@@ -145,24 +146,27 @@ obj_tracer =    $(objdir)/nml.o    \
 
 # Static library
 tracer-static: $(obj_bspline) $(obj_tracer)
-	ar rc libtracer.a $^
+	ar rc $(objdir)/libtracer.a $^
 	@echo " "
-	@echo "    libtracer.a is ready."
+	@echo "    $(objdir)/libtracer.a is ready."
 	@echo " "
 			   
 ## Complete programs
 
 test: tracer-static 
-	$(FC) $(DFLAGS) $(FLAGS) -o test_greenland.x $(srcdir)/test_greenland.f90 libtracer.a $(LFLAGS)
+	$(FC) $(DFLAGS) $(FLAGS) -o $(bindir)/test_greenland.x $(srcdir)/test_greenland.f90 \
+			-L${CURDIR}/libtracer/include -ltracer $(LFLAGS)
 	@echo " "
-	@echo "    test_greenland.x is ready."
+	@echo "    $(bindir)/test_greenland.x is ready."
 	@echo " "
 
 test_profile: tracer-static
-	$(FC) $(DFLAGS) $(FLAGS) -o test_profile.x $(srcdir)/test_profile.f90 libtracer.a $(LFLAGS)
+	$(FC) $(DFLAGS) $(FLAGS) -o $(bindir)/test_profile.x $(srcdir)/test_profile.f90 \
+			-L${CURDIR}/libtracer/include -ltracer $(LFLAGS)
 	@echo " "
-	@echo "    test_profile.x is ready."
+	@echo "    $(bindir)/test_profile.x is ready."
 	@echo " "
 
 clean:
-	rm -f *.x $(objdir)/*.o $(objdir)/*.mod
+	rm -f *.x $(bindir)/*.x
+	rm -f gmon.out $(objdir)/*.o $(objdir)/*.mod $(objdir)/*.a $(objdir)/*.so
