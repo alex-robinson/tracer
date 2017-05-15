@@ -65,8 +65,8 @@ else ifeq ($(env),airaki) ## env=airaki
     FC  = gfortran
     INC_NC  = -I/opt/local/include
     LIB_NC  = -L/opt/local/lib -lnetcdff -lnetcdf
-    INC_COORD = -I/Users/robinson/models/EURICE/coord/.obj
-    LIB_COORD = /Users/robinson/models/EURICE/coord/libcoordinates.a
+    INC_COORD = -I/Users/robinson/models/EURICE/coordinates/.obj
+    LIB_COORD = /Users/robinson/models/EURICE/coordinates/libcoordinates.a
 
     FLAGS  = -I$(objdir) -J$(objdir) $(INC_COORD) $(INC_NC) 
     LFLAGS = $(LIB_COORD) $(LIB_NC)
@@ -124,7 +124,7 @@ $(objdir)/tracer2D.o: $(srcdir)/tracer2D.f90 $(objdir)/tracer.o $(objdir)/tracer
 $(objdir)/bspline_sub_module.o: $(libdir)/bspline-fortran/bspline_sub_module.f90
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
-$(objdir)/bspline_oo_module.o: $(libdir)/bspline-fortran/bspline_oo_module.f90
+$(objdir)/bspline_oo_module.o: $(libdir)/bspline-fortran/bspline_oo_module.f90 $(objdir)/bspline_sub_module.o
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
 $(objdir)/bspline_module.o: $(libdir)/bspline-fortran/bspline_module.f90 $(objdir)/bspline_sub_module.o $(objdir)/bspline_oo_module.o
@@ -142,17 +142,24 @@ obj_tracer =    $(objdir)/nml.o    \
 				$(objdir)/tracer_interp.o \
 				$(objdir)/tracer.o \
 				$(objdir)/tracer2D.o
-				   
+
+# Static library
+tracer-static: $(obj_bspline) $(obj_tracer)
+	ar rc libtracer.a $^
+	@echo " "
+	@echo "    libtracer.a is ready."
+	@echo " "
+			   
 ## Complete programs
 
-test: $(obj_bspline) $(obj_tracer) 
-	$(FC) $(DFLAGS) $(FLAGS) -o test_greenland.x $^ $(srcdir)/test_greenland.f90 $(LFLAGS)
+test: tracer-static 
+	$(FC) $(DFLAGS) $(FLAGS) -o test_greenland.x $(srcdir)/test_greenland.f90 libtracer.a $(LFLAGS)
 	@echo " "
 	@echo "    test_greenland.x is ready."
 	@echo " "
 
-test_profile: $(obj_bspline) $(obj_tracer) 
-	$(FC) $(DFLAGS) $(FLAGS) -o test_profile.x $^ $(srcdir)/test_profile.f90 $(LFLAGS)
+test_profile: tracer-static
+	$(FC) $(DFLAGS) $(FLAGS) -o test_profile.x $(srcdir)/test_profile.f90 libtracer.a $(LFLAGS)
 	@echo " "
 	@echo "    test_profile.x is ready."
 	@echo " "

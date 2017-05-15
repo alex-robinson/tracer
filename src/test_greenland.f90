@@ -70,7 +70,7 @@ program tracertest
         write(*,*) "time = ", time, trc1%par%n_active
 
         call tracer_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
-                            x=xc,y=yc,z=sigma,z_srf=zs,H=H,ux=ux,uy=uy,uz=uz)
+                            x=xc,y=yc,z=sigma,z_srf=zs,H=H,ux=ux,uy=uy,uz=uz,dep_now=.TRUE.)
 
         q = q+1 
         if (q==10) then 
