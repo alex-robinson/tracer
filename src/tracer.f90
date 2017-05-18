@@ -30,6 +30,7 @@ module tracer
     type tracer_state_class 
         integer,    allocatable :: active(:), id(:)
         real(prec), allocatable :: x(:), y(:), z(:), sigma(:)
+        real(prec), allocatable :: dpth(:), z_srf(:)
         real(prec), allocatable :: ux(:), uy(:), uz(:)
         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
         real(prec), allocatable :: T(:)              ! Current temperature of the tracer (for borehole comparison, internal melting...)
@@ -96,8 +97,7 @@ contains
         type(tracer_class),   intent(OUT) :: trc 
         character(len=*),     intent(IN)  :: filename 
         real(prec), intent(IN) :: x(:), y(:), z(:)
-        logical,    intent(IN) :: is_sigma 
-
+        logical,    intent(IN) :: is_sigma  
         real(4) :: time 
 
         ! Load the parameters
@@ -114,6 +114,9 @@ contains
         trc%now%x         = mv 
         trc%now%y         = mv 
         trc%now%z         = mv 
+        trc%now%sigma     = mv 
+        trc%now%z_srf     = mv 
+        trc%now%dpth      = mv 
         trc%now%ux        = mv 
         trc%now%uy        = mv 
         trc%now%uz        = mv 
@@ -151,15 +154,15 @@ contains
         real(prec), intent(IN) :: x(:), y(:), z(:)
         real(prec), intent(IN) :: z_srf(:,:), H(:,:)
         real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
-        logical,    intent(IN) :: dep_now 
-        character(len=*), optional :: order 
-
+        logical, intent(IN) :: dep_now 
+        character(len=*), intent(IN), optional :: order 
+        
         ! Local variables  
         character(len=3) :: idx_order 
-        real(prec) :: zc(size(z))   ! Actual cartesian z-axis after applying sigma*H
-        real(prec) :: z_srf_now  
+        real(prec) :: zc(size(z))   ! Actual cartesian z-axis after applying sigma*H 
         integer    :: i, j, k, nx, ny, nz, ksrf, kbase  
         real(prec), allocatable :: x1(:), y1(:), z1(:)
+        real(prec), allocatable :: z_srf1(:,:), H1(:,:)
         real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
         logical :: z_descending 
 
@@ -177,6 +180,8 @@ contains
 
         ! Also determine whether z-axis is ascending or descending 
         call tracer_reshape3D(idx_order,x,y,z,ux,uy,uz,x1,y1,z1,ux1,uy1,uz1)
+        call tracer_reshape2D_field(idx_order,x1,y1,z_srf,z_srf1)
+        call tracer_reshape2D_field(idx_order,x1,y1,H,H1)
 
         ! Note: GRISLI (nx,ny,nz): sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
         !       SICO (nz,ny,nx): sigma(1) = 0, sigma(nz) = 1
@@ -207,7 +212,7 @@ contains
 
             usig1 = 0.0
             do k = 1, nz 
-                where (H .gt. 0.0) usig1(:,:,k) = uz1(:,:,k) / H
+                where (H1 .gt. 0.0) usig1(:,:,k) = uz1(:,:,k) / H1
             end do 
 
             call interp_bspline3D_weights(bspline3d_ux,x1,y1,z1,ux1)
@@ -230,13 +235,17 @@ contains
                 ! 4. Perform trilinear interpolation 
 
                 ! Linear interpolation used for surface position 
-                par_lin    = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
-                now%H(i)   = interp_bilinear(par_lin,H)
-                z_srf_now  = interp_bilinear(par_lin,z_srf)
+                par_lin      = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
+                now%H(i)     = interp_bilinear(par_lin,H1)
+                now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
+                now%z(i)     = now%z_srf(i) - now%dpth(i)
 
                 ! Calculate zc-axis for the current point
                 ! (z_bedrock + ice thickness)
-                zc = (z_srf_now-now%H(i)) + z1*now%H(i)
+                zc = (now%z_srf(i)-now%H(i)) + z1*now%H(i)
+
+!                 ! Ensure that the tracer z-value is not higher than the surface
+!                 if (now%z(i) .gt. now%z_srf(i)) now%z(i) = now%z_srf(i)
 
                 if (trim(par%interp_method) .eq. "linear") then 
                     ! Trilinear interpolation 
@@ -251,7 +260,7 @@ contains
     !                 now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
     !                 now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
     !                 ! Until trilinear interp is ready, maintain z-position at surface
-    !                 now%z(i)   = interp_bilinear(par_lin,z_srf)
+    !                 now%z(i)   = interp_bilinear(par_lin,z_srf1)
 
                 else
                     ! Spline interpolation 
@@ -264,6 +273,8 @@ contains
                 now%T(i)   = 260.0 
                 now%thk(i) = 0.3 
 
+!                 write(*,*) i, now%z(i), now%uz(i), maxval(zc), maxval(z1)
+
             end if 
 
         end do 
@@ -273,12 +284,14 @@ contains
 
         ! Update the tracer positions 
         call calc_position(now%x,now%y,now%z,now%ux,now%uy,now%uz,par%dt,now%active)
+!         call calc_position(now%x,now%y,now%dpth,now%ux,now%uy,-now%uz,par%dt,now%active)
+        now%dpth = max(now%z_srf - now%z, 0.0) 
 
         ! Destroy points that moved outside the valid region 
-        call tracer_deactivate(par,now,x1,y1,maxval(H))
+        call tracer_deactivate(par,now,x1,y1,maxval(H1))
 
         ! Activate new tracers if desired
-        if (dep_now) call tracer_activate(par,now,x1,y1,H=H,nmax=par%n_max_dep)
+        if (dep_now) call tracer_activate(par,now,x1,y1,H=H1,nmax=par%n_max_dep)
 
         ! Finish activation for necessary points 
         do i = 1, par%n 
@@ -290,11 +303,13 @@ contains
                 par_lin = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
 
                 ! Apply interpolation weights to variables
-                now%z(i)   = interp_bilinear(par_lin,z_srf)
-                now%H(i)   = interp_bilinear(par_lin,H)
-                now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,ksrf))
-                now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,ksrf))
-                now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,ksrf)) 
+                now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
+                now%z(i)     = now%z_srf(i)
+                now%dpth(i)  = 0.0 
+                now%H(i)     = interp_bilinear(par_lin,H1)
+                now%ux(i)    = interp_bilinear(par_lin,ux1(:,:,ksrf))
+                now%uy(i)    = interp_bilinear(par_lin,uy1(:,:,ksrf))
+                now%uz(i)    = interp_bilinear(par_lin,uz1(:,:,ksrf)) 
 
                 ! Initialize state variables
                 now%T(i)   = 260.0 
@@ -308,24 +323,25 @@ contains
                 dep%z(i)    = now%z(i) 
 
                 now%active(i) = 2 
-
+                
             end if 
 
         end do 
 
 
         ! == TO DO == 
-        ! - Generate position based on a random algorithm plus weighting
-        ! - Weighting function based on H and U for location, input par deposition frequency 
         ! - Attach whatever information we want to trace (age, deposition elevation and location, climate, isotopes, etc)
-
+        ! - Potentially attach this information via a separate subroutine, using a flag to see if
+        !   it was just deposited, then in main program calling eg, tracer_add_dep_variable(trc,"T",T),
+        !   where the argument "T" should match a list of available variables, and T should be the variable
+        !   to be stored from the main program. 
 
         ! Update summary statistics 
         par%n_active = count(now%active.gt.0)
 
         ! Calculate density 
         stats%density = 0 
-        stats%density(:,:,nz) = calc_tracer_density(par,now,x1,y1,z_srf)
+        stats%density(:,:,nz) = calc_tracer_density(par,now,x1,y1,z_srf1)
 
         return 
 
@@ -366,7 +382,7 @@ contains
         integer, intent(IN) :: nmax  
 
         integer :: ntot  
-        real(prec) :: p(size(H,1),size(H,2))
+        real(prec) :: p(size(H,1),size(H,2)), p_init(size(H,1),size(H,2))
         integer :: i, j, k, ij(2)
         real(prec), allocatable :: jit(:,:), dens(:,:)
         real(prec) :: xmin, ymin, xmax, ymax 
@@ -374,8 +390,9 @@ contains
         ! How many points can be activated?
         ntot = min(nmax,count(now%active == 0))
 
-        ! Determine desired distribution of points on low resolution grid
-        p = gen_distribution(H,H_min=par%H_min_dep,ntot=ntot,alpha=par%alpha,dist=par%dist)
+        ! Determine initial desired distribution of points on low resolution grid
+        p_init = gen_distribution(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%dist)
+        p = p_init  
 
         ! Generate random numbers to populate points 
         allocate(jit(2,ntot))
@@ -390,20 +407,22 @@ contains
         end if 
 
 !         write(*,*) "range jit: ", minval(jit), maxval(jit)
-!         write(*,*) "npts: ", count(npts .gt. 0) 
+!         write(*,*) "npts: ", count(now%active == 0)
 !         write(*,*) "ntot: ", ntot 
 !         stop 
     
-        ! Calculate domain boundaries to apply limits 
+        ! Calculate domain boundaries to be able to apply limits 
         xmin = minval(x) 
         xmax = maxval(x) 
         ymin = minval(y) 
         ymax = maxval(y) 
 
-        do i = 1, count(p .gt. 0.0)
-            ij = maxloc(p,mask=p.gt.0.0)
-
+        if (maxval(p_init) .gt. 0.0) then 
+            ! Activate points in locations with non-zero probability
+            ! This if-statement ensures some valid points currently exist in the domain
+            
             k = 0 
+
             do j = 1, par%n 
 
                 if (now%active(j)==0) then 
@@ -412,6 +431,8 @@ contains
                     k = k + 1
                     par%id_max = par%id_max+1 
                     now%id(j)  = par%id_max 
+
+                    ij = maxloc(p,mask=p.gt.0.0)
                     now%x(j) = x(ij(1)) + jit(1,k)
                     now%y(j) = y(ij(2)) + jit(2,k)
                     
@@ -421,16 +442,21 @@ contains
                     if (now%y(j) .gt. ymax) now%y(j) = ymax 
                     
                     p(ij(1),ij(2)) = 0.0 
-
-                    exit 
+                     
                 end if 
 
+                ! Stop when all points have been allocated
+                if (k .ge. ntot) exit 
+
+                ! If there are no more points with non-zero probability, reset probability
+                if (maxval(p) .eq. 0.0) p = p_init 
+
             end do 
+          
+        end if
 
-            ! Stop when all points have been allocated
-            if (k .ge. ntot) exit 
-
-        end do 
+        ! Summary 
+        write(*,*) "tracer_activate:: ", count(now%active == 0), count(now%active .eq. 1), count(now%active .eq. 2)
 
         return 
 
@@ -447,14 +473,14 @@ contains
 
         ! Deactivate points where:
         !  - Thickness of ice sheet at point's location is below threshold
-        !  - Point is past maximum depth into the ice sheet 
         !  - Point is above maximum ice thickness Hmax (interp error)
+        !  - Point is past maximum depth into the ice sheet 
         !  - Velocity of point is higher than maximum threshold 
         !  - x/y position is out of boundaries of the domain 
         where (now%active .gt. 0 .and. &
-            (   now%H .lt. par%H_min                           .or. &
-                (now%H - now%z)/now%H .ge. par%depth_max       .or. &
+              ( now%H .lt. par%H_min                           .or. &
                 now%H .gt. Hmax                                .or. &
+                now%dpth/now%H .ge. par%depth_max              .or. &
                 sqrt(now%ux**2 + now%uy**2) .gt. par%U_max     .or. &
                 now%x .lt. minval(x) .or. now%x .gt. maxval(x) .or. &
                 now%y .lt. minval(y) .or. now%y .gt. maxval(y) ) ) 
@@ -465,6 +491,9 @@ contains
             now%x         = mv 
             now%y         = mv 
             now%z         = mv 
+            now%sigma     = mv 
+            now%z_srf     = mv 
+            now%dpth      = mv 
             now%ux        = mv 
             now%uy        = mv 
             now%uz        = mv 
@@ -503,19 +532,18 @@ contains
 
     end subroutine calc_position
 
-    function gen_distribution(H,H_min,ntot,alpha,dist) result(p)
+    function gen_distribution(H,H_min,alpha,dist) result(p)
 
         implicit none 
 
         real(prec), intent(IN) :: H(:,:)
         real(prec), intent(IN) :: H_min, alpha 
-        integer, intent(IN)    :: ntot           ! Total points to allocate
         character(len=*), intent(IN) :: dist 
         real(prec) :: p(size(H,1),size(H,2))
 
         ! Local variables
         integer    :: k, ij(2)
-
+        real(prec) :: p_sum 
 
         select case(trim(dist)) 
 
@@ -536,8 +564,9 @@ contains
 
         end select 
 
-        ! Now make sure the cumulative probabilities sum to number of points to allocate 
-        p = p / sum(p)
+        ! Normalize probability sum to one 
+        p_sum = sum(p)
+        if (p_sum .gt. 0.0) p = p / p_sum
 
         return 
 
@@ -652,10 +681,11 @@ contains
         par%dt        = 0.0             ! year
 
         ! Consistency checks 
-        if (trim(par%interp_method) .ne. "linear" .or. &
+        if (trim(par%interp_method) .ne. "linear" .and. &
             trim(par%interp_method) .ne. "spline" ) then 
-            write(*,*) "tracer_init:: error: interp_method must be 'linear' &
+            write(0,*) "tracer_init:: error: interp_method must be 'linear' &
             &or 'spline': "//trim(par%interp_method)
+            stop 
         end if 
 
         return 
@@ -677,7 +707,8 @@ contains
         ! Allocate tracer 
         allocate(now%active(n))
         allocate(now%id(n))
-        allocate(now%x(n),now%y(n),now%z(n), now%sigma(n))
+        allocate(now%x(n),now%y(n),now%z(n),now%sigma(n))
+        allocate(now%z_srf(n),now%dpth(n))
         allocate(now%ux(n),now%uy(n),now%uz(n))
         allocate(now%thk(n))
         allocate(now%T(n))
@@ -701,11 +732,13 @@ contains
         type(tracer_dep_class),   intent(INOUT) :: dep
         
         ! Deallocate state objects
-        if (allocated(now%active)) deallocate(now%active)
+        if (allocated(now%active))    deallocate(now%active)
         if (allocated(now%x))         deallocate(now%x)
         if (allocated(now%y))         deallocate(now%y)
         if (allocated(now%z))         deallocate(now%z)
         if (allocated(now%sigma))     deallocate(now%sigma)
+        if (allocated(now%z_srf))     deallocate(now%z_srf)
+        if (allocated(now%dpth))      deallocate(now%dpth)
         if (allocated(now%ux))        deallocate(now%ux)
         if (allocated(now%uy))        deallocate(now%uy)
         if (allocated(now%uz))        deallocate(now%uz)
@@ -736,6 +769,14 @@ contains
         type(tracer_stats_class), intent(INOUT) :: stats 
         real(prec), intent(IN) :: x(:), y(:), z(:)
         
+        real(prec) :: z1(size(z))
+        integer    :: nz 
+
+        ! Determine ascending z-axis order 
+        nz = size(z)
+        z1 = z 
+        if (z(1) .gt. z(nz)) z1 = z(nz:1)
+
         ! Make surce object is deallocated
         call tracer_deallocate_stats(stats)
 
@@ -750,7 +791,7 @@ contains
         ! Also store axis information directly
         stats%x = x 
         stats%y = y 
-        stats%z = z 
+        stats%z = z1 ! Always ascending axis
 
         return
 
@@ -859,8 +900,8 @@ contains
 
             case DEFAULT 
 
-                write(*,*) "tracer_reshape3D:: error: unrecognized array order: ",trim(idx_order)
-                write(*,*) "    Possible choices are: ijk, kji"
+                write(0,*) "tracer_reshape3D:: error: unrecognized array order: ",trim(idx_order)
+                write(0,*) "    Possible choices are: ijk, kji"
                 stop  
 
         end select 
@@ -869,6 +910,50 @@ contains
 
     end subroutine tracer_reshape3D
 
+    subroutine tracer_reshape2D_field(idx_order,x1,y1,var,var1)
+
+        implicit none 
+
+        character(len=3), intent(IN) :: idx_order 
+        real(prec), intent(IN) :: var(:,:)
+        real(prec), intent(IN) :: x1(:), y1(:)
+        real(prec), intent(INOUT), allocatable :: var1(:,:)
+        integer :: i, j
+        integer :: nx, ny
+
+        nx = size(x1)
+        ny = size(y1)
+
+        if (allocated(var1)) deallocate(var1)
+        allocate(var1(nx,ny))
+
+        select case(trim(idx_order))
+
+            case("ijk")
+                ! x, y, z array order 
+
+                var1 = var 
+
+            case("kji")
+                ! z, y, x array order 
+
+                do i = 1, nx 
+                do j = 1, ny 
+                    var1(i,j)  = var(j,i)
+                end do 
+                end do 
+
+            case DEFAULT 
+
+                write(0,*) "tracer_reshape2D_field:: error: unrecognized array order: ",trim(idx_order)
+                write(0,*) "    Possible choices are: ijk, kji"
+                stop  
+
+        end select 
+
+        return 
+
+    end subroutine tracer_reshape2D_field
 
     ! ================================================
     !
@@ -934,6 +1019,10 @@ contains
                         start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"z",trc%now%z,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"dpth",trc%now%dpth,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
+        call nc_write(path_out,"z_srf",trc%now%z_srf,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"ux",trc%now%ux,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"uy",trc%now%uy,dim1="pt",dim2="time", missing_value=MV, &
@@ -984,10 +1073,10 @@ contains
 
         ! Create output file 
         call nc_create(path_out)
-        call nc_write_dim(path_out,"xc",   x=trc%stats%x*1e-3)
-        call nc_write_dim(path_out,"yc",   x=trc%stats%y*1e-3)
+        call nc_write_dim(path_out,"xc",   x=trc%stats%x*1e-3,units="km")
+        call nc_write_dim(path_out,"yc",   x=trc%stats%y*1e-3,units="km")
         call nc_write_dim(path_out,"sigma",x=trc%stats%z)
-        call nc_write_dim(path_out,"time",x=time,unlimited=.TRUE.)
+        call nc_write_dim(path_out,"time", x=time,unlimited=.TRUE.)
 
 !         call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="sigma",missing_value=int(MV), &
 !                       units="1",long_name="Tracer density (surface)")

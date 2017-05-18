@@ -137,16 +137,17 @@ obj_bspline =   $(objdir)/bspline_sub_module.o    \
 
 #########################
 
-obj_tracer =    $(objdir)/nml.o    \
-				$(objdir)/ncio.o   \
-				$(objdir)/tracer_precision.o \
+obj_tracer =    $(objdir)/tracer_precision.o \
 				$(objdir)/tracer_interp.o \
 				$(objdir)/tracer.o \
 				$(objdir)/tracer2D.o
 
+obj_libs   =    $(objdir)/nml.o    \
+				$(objdir)/ncio.o
+				
 # Static library
-tracer-static: $(obj_bspline) $(obj_tracer)
-	ar rc $(objdir)/libtracer.a $^
+tracer-static: $(obj_libs) $(obj_bspline) $(obj_tracer)
+	ar rc $(objdir)/libtracer.a $(obj_bspline) $(obj_tracer)
 	@echo " "
 	@echo "    $(objdir)/libtracer.a is ready."
 	@echo " "
@@ -155,14 +156,14 @@ tracer-static: $(obj_bspline) $(obj_tracer)
 
 test: tracer-static 
 	$(FC) $(DFLAGS) $(FLAGS) -o $(bindir)/test_greenland.x $(srcdir)/test_greenland.f90 \
-			-L${CURDIR}/libtracer/include -ltracer $(LFLAGS)
+			-L${CURDIR}/libtracer/include -ltracer $(obj_libs) $(LFLAGS)
 	@echo " "
 	@echo "    $(bindir)/test_greenland.x is ready."
 	@echo " "
 
 test_profile: tracer-static
 	$(FC) $(DFLAGS) $(FLAGS) -o $(bindir)/test_profile.x $(srcdir)/test_profile.f90 \
-			-L${CURDIR}/libtracer/include -ltracer $(LFLAGS)
+			-L${CURDIR}/libtracer/include -ltracer $(obj_libs) $(LFLAGS)
 	@echo " "
 	@echo "    $(bindir)/test_profile.x is ready."
 	@echo " "
