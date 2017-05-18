@@ -323,7 +323,7 @@ contains
                 dep%z(i)    = now%z(i) 
 
                 now%active(i) = 2 
-                
+
             end if 
 
         end do 
@@ -1044,8 +1044,12 @@ contains
                         start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"dep_H",trc%dep%H,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
+        tmp = trc%now%dep_x
+        where(trc%now%dep_x .ne. MV) tmp = trc%now%dep_x*1e-3
         call nc_write(path_out,"dep_x",trc%dep%x,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
+        tmp = trc%now%dep_y
+        where(trc%now%dep_y .ne. MV) tmp = trc%now%dep_y*1e-3
         call nc_write(path_out,"dep_y",trc%dep%y,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"dep_z",trc%dep%z,dim1="pt",dim2="time", missing_value=MV, &
