@@ -13,7 +13,8 @@ module tracer
     type tracer_par_class 
         integer :: n, n_active, n_max_dep, id_max 
         logical :: is_sigma                     ! Is the defined z-axis in sigma coords
-        real(prec) :: time_now, time_old, dt 
+        real(prec) :: time_now, time_old, dt
+        real(prec) :: time_dep  
         real(prec) :: thk_min                   ! Minimum thickness of tracer (m)
         real(prec) :: H_min                     ! Minimum ice thickness to track (m)
         real(prec) :: depth_max                 ! Maximum depth of tracer (fraction)
@@ -134,6 +135,7 @@ contains
 
         ! Initialize the time 
         trc%par%time_now  = time 
+        trc%par%time_dep  = time 
 
         ! Initialize random number generator 
         call random_seed() 
@@ -173,6 +175,7 @@ contains
         par%time_now = time 
         par%dt       = par%time_now - par%time_old 
 
+        if (dep_now) par%time_dep = par%time_now 
 
         ! Determine order of indices (default ijk)
         idx_order = "ijk"
@@ -303,9 +306,10 @@ contains
                 par_lin = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
 
                 ! Apply interpolation weights to variables
+                now%dpth(i)  = 1.0   ! Always deposit below the surface (eg 1 m) to avoid zero z-velocity
                 now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
-                now%z(i)     = now%z_srf(i)
-                now%dpth(i)  = 0.0 
+                now%z(i)     = now%z_srf(i)-now%dpth(i)
+                
                 now%H(i)     = interp_bilinear(par_lin,H1)
                 now%ux(i)    = interp_bilinear(par_lin,ux1(:,:,ksrf))
                 now%uy(i)    = interp_bilinear(par_lin,uy1(:,:,ksrf))
