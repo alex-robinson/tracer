@@ -633,6 +633,49 @@ contains
 
     end function calc_tracer_density
 
+    subroutine tracer_to_isochrone(trc,x,y,z,z_srf,H)
+        ! Check tracer density near the surface
+        ! (to avoid depositing too many particles in the same place)
+        
+        implicit none
+        
+        type(tracer_class), intent(INOUT) :: trc
+        real(prec), intent(IN) :: x(:), y(:), z(:), z_srf(:,:), H(:,:)
+
+        ! Local variables 
+        integer :: i, j, k
+        integer :: nx, ny
+        real(prec) :: dx, dy 
+        real(prec) :: zc(size(z))
+        integer(prec) :: id(trc%par%n)
+        real(prec)    :: dist(trc%par%n)
+
+        nx = size(x)
+        ny = size(y)
+        
+        ! Loop over grid and fill in information
+        do j = 2, ny 
+        do i = 2, nx 
+            dx = (x(i)-x(i-1))/2.0
+            dy = (y(j)-y(j-1))/2.0
+
+            ! Initially reset stored id's to missing
+            id = MV 
+
+            ! Filter for active particles within the grid box of interest 
+            where (trc%now%active == 2 .and. &
+                   abs(x(i)-trc%now%x) .lt. dx .and. abs(y(j)-trc%now%y) .lt. dy)
+                id = trc%now%id 
+            end where 
+
+            
+
+        end do 
+        end do  
+                
+        return
+
+    end subroutine tracer_to_isochrone
 
 
     ! ================================================
@@ -1064,6 +1107,7 @@ contains
     end subroutine tracer_write 
 
     subroutine tracer_write_stats(trc,time,fldr,filename)
+        ! Write various meta-tracer information (ie, lagrangian => eulerian)
 
         implicit none 
 
