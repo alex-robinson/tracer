@@ -666,9 +666,12 @@ contains
         integer :: i, j, k, q
         integer :: nx, ny, nz, nq
         real(prec), allocatable :: dx(:), dy(:) 
+        real(prec) :: dt 
         real(prec) :: zc(size(z))
-        integer(prec) :: id(trc%par%n)
+        integer       :: id(trc%par%n)
         real(prec)    :: dist(trc%par%n)
+        integer, allocatable :: inds(:)
+        integer :: n_ind 
 
         nx = size(x)
         ny = size(y)
@@ -681,23 +684,31 @@ contains
         dy(1)    = dy(2)
         dy(ny+1) = dy(ny)
         
+        dt = 1.0 ! Isochrone uncertainty of 1 ka  
+
         ! Loop over grid and fill in information
         do j = 1, ny 
         do i = 1, nx 
 
-            ! Initially reset stored id's to missing
-            id = MV 
-
-            ! Filter for active particles within the grid box of interest 
-            where (trc%now%active == 2 .and. &
-                   trc%now%x .gt. x(i)-dx(i) .and. trc%now%x .le. x(i)+dx(i+1) .and. &
-                   trc%now%y .gt. y(j)-dy(j) .and. trc%now%y .le. y(j)+dy(j+1))
-                id = trc%now%id 
-            end where 
-
             ! Calculate the isochrones
             nq = size(trc%stats%age_iso)
             do q = 1, nq 
+
+                ! Filter for active particles within the grid box and age of interest
+                call which (trc%now%active == 2 .and. &
+                            trc%now%x .gt. x(i)-dx(i) .and. trc%now%x .le. x(i)+dx(i+1) .and. &
+                            trc%now%y .gt. y(j)-dy(j) .and. trc%now%y .le. y(j)+dy(j+1) .and. &
+                            (0.0 - trc%dep%time)*1e-3 .ge. trc%stats%age_iso(q)-dt .and. &
+                            (0.0 - trc%dep%time)*1e-3 .le. trc%stats%age_iso(q)+dt, inds, n_ind) 
+
+                ! Calculate range mean/sd depth for given age range
+                if (n_ind .gt. 0) then 
+                    trc%stats%depth_iso(i,j,q)     = calc_mean(trc%now%dpth(inds))
+                    trc%stats%depth_iso_err(i,j,q) = calc_sd(trc%now%dpth(inds),trc%stats%depth_iso(i,j,q))
+                else 
+                    trc%stats%depth_iso(i,j,q)     = MV 
+                    trc%stats%depth_iso_err(i,j,q) = MV 
+                end if 
 
             end do 
             
@@ -709,14 +720,47 @@ contains
 
     end subroutine calc_tracer_stats
 
-    function calc_sd(x) result(sd)
+    function calc_mean(x) result(mean)
 
         implicit none 
+
+        real(prec), intent(IN) :: x(:) 
+        real(prec) :: mean 
+        integer :: n 
+
+        n = count(x.ne.MV)
+
+        if (n .gt. 0) then 
+            mean = sum(x,mask=x.ne.MV) / real(n)
+        else 
+            mean = MV 
+        end if 
+        
+        return 
+
+    end function calc_mean 
+
+    function calc_sd(x,mean) result(stdev)
+
+        implicit none 
+
+        real(prec), intent(IN) :: x(:) 
+        real(prec) :: mean 
+        real(prec) :: stdev 
+        integer :: n 
+
+        n = count(x.ne.MV)
+
+        if (n .gt. 0) then 
+            stdev = sqrt( sum((x - mean)**2) / real(n) )
+        else 
+            stdev = MV 
+        end if 
 
         return 
 
     end function calc_sd 
-    
+
     ! ================================================
     !
     ! Initialization routines 
@@ -1226,6 +1270,44 @@ contains
 
     end subroutine tracer_read
 
+    subroutine which(x,ind,stat)
+        ! Analagous to R::which function
+        ! Returns indices that match condition x==.TRUE.
+
+        implicit none 
+
+        logical :: x(:)
+        integer, allocatable :: tmp(:), ind(:)
+        integer, optional :: stat  
+        integer :: n, i  
+
+        n = count(x)
+        allocate(tmp(n))
+        tmp = 0 
+
+        n = 0
+        do i = 1, size(x) 
+            if (x(i)) then 
+                n = n+1
+                tmp(n) = i 
+            end if
+        end do 
+
+        if (present(stat)) stat = n 
+
+        if (allocated(ind)) deallocate(ind)
+
+        if (n .eq. 0) then 
+            allocate(ind(1))
+            ind = -1 
+        else
+            allocate(ind(n))
+            ind = tmp(1:n)
+        end if 
+        
+        return 
+
+    end subroutine which
 
 end module tracer 
 
