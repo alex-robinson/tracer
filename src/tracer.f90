@@ -43,6 +43,13 @@ module tracer
         real(prec), allocatable :: x(:), y(:), z(:) 
         integer,    allocatable :: density(:,:,:)
 
+        real(prec), allocatable :: depth_norm(:)
+        real(prec), allocatable :: age_iso(:) 
+        real(prec), allocatable :: depth_iso(:,:,:)
+        real(prec), allocatable :: depth_iso_err(:,:,:)
+        real(prec), allocatable :: ice_age(:,:,:)
+        real(prec), allocatable :: ice_age_err(:,:,:)
+
     end type
 
     type tracer_dep_class 
@@ -101,12 +108,25 @@ contains
         logical,    intent(IN) :: is_sigma  
         real(4) :: time 
 
+        ! Local variables 
+        integer :: i 
+
         ! Load the parameters
         call tracer_par_load(trc%par,filename,is_sigma)
 
         ! Allocate the state variables 
         call tracer_allocate(trc%now,trc%dep,n=trc%par%n)
         call tracer_allocate_stats(trc%stats,x,y,z)
+
+        ! ===== Initialize stats depth axes ===============
+
+        trc%stats%age_iso = [11.7,29.0,57.0,115.0]
+
+        do i = 1, size(trc%stats%depth_norm)
+            trc%stats%depth_norm(i) = 0.04*real(i)
+        end do 
+
+        ! =================================================
 
         ! Initialize state 
         trc%now%active    = 0 
@@ -633,19 +653,19 @@ contains
 
     end function calc_tracer_density
 
-    subroutine tracer_to_isochrone(trc,x,y,z,z_srf,H)
-        ! Check tracer density near the surface
-        ! (to avoid depositing too many particles in the same place)
-        
+    subroutine calc_tracer_stats(trc,x,y,z,z_srf,H)
+        ! Convert tracer information to isochrone format matching
+        ! Macgregor et al. (2015)
+
         implicit none
         
         type(tracer_class), intent(INOUT) :: trc
         real(prec), intent(IN) :: x(:), y(:), z(:), z_srf(:,:), H(:,:)
 
         ! Local variables 
-        integer :: i, j, k
-        integer :: nx, ny
-        real(prec) :: dx, dy 
+        integer :: i, j, k, q
+        integer :: nx, ny, nz, nq
+        real(prec), allocatable :: dx(:), dy(:) 
         real(prec) :: zc(size(z))
         integer(prec) :: id(trc%par%n)
         real(prec)    :: dist(trc%par%n)
@@ -653,21 +673,33 @@ contains
         nx = size(x)
         ny = size(y)
         
+        allocate(dx(nx+1),dy(ny+1))
+        dx(2:nx) = x(2:nx)-x(1:nx-1)
+        dx(1)    = dx(2)
+        dx(nx+1) = dx(nx)
+        dy(2:ny) = x(2:ny)-x(1:ny-1)
+        dy(1)    = dy(2)
+        dy(ny+1) = dy(ny)
+        
         ! Loop over grid and fill in information
-        do j = 2, ny 
-        do i = 2, nx 
-            dx = (x(i)-x(i-1))/2.0
-            dy = (y(j)-y(j-1))/2.0
+        do j = 1, ny 
+        do i = 1, nx 
 
             ! Initially reset stored id's to missing
             id = MV 
 
             ! Filter for active particles within the grid box of interest 
             where (trc%now%active == 2 .and. &
-                   abs(x(i)-trc%now%x) .lt. dx .and. abs(y(j)-trc%now%y) .lt. dy)
+                   trc%now%x .gt. x(i)-dx(i) .and. trc%now%x .le. x(i)+dx(i+1) .and. &
+                   trc%now%y .gt. y(j)-dy(j) .and. trc%now%y .le. y(j)+dy(j+1))
                 id = trc%now%id 
             end where 
 
+            ! Calculate the isochrones
+            nq = size(trc%stats%age_iso)
+            do q = 1, nq 
+
+            end do 
             
 
         end do 
@@ -675,9 +707,16 @@ contains
                 
         return
 
-    end subroutine tracer_to_isochrone
+    end subroutine calc_tracer_stats
 
+    function calc_sd(x) result(sd)
 
+        implicit none 
+
+        return 
+
+    end function calc_sd 
+    
     ! ================================================
     !
     ! Initialization routines 
@@ -840,6 +879,18 @@ contains
         stats%y = y 
         stats%z = z1 ! Always ascending axis
 
+        allocate(stats%depth_norm(25))  ! To match Macgregor et al. (2015)
+        allocate(stats%age_iso(4))      ! To match Macgregor et al. (2015)
+        allocate(stats%depth_iso(size(x),size(y),size(stats%age_iso)))
+        allocate(stats%depth_iso_err(size(x),size(y),size(stats%age_iso)))
+        allocate(stats%ice_age(size(x),size(y),size(stats%depth_norm)))
+        allocate(stats%ice_age_err(size(x),size(y),size(stats%depth_norm)))
+        
+        stats%depth_iso     = 0.0 
+        stats%depth_iso_err = 0.0 
+        stats%ice_age       = 0.0 
+        stats%ice_age_err   = 0.0 
+        
         return
 
     end subroutine tracer_allocate_stats
@@ -851,13 +902,19 @@ contains
         type(tracer_stats_class), intent(INOUT) :: stats 
 
         ! Deallocate stats objects
-        if (allocated(stats%density)) deallocate(stats%density)
+        if (allocated(stats%density))       deallocate(stats%density)
 
+        if (allocated(stats%depth_norm))    deallocate(stats%depth_norm)
+        if (allocated(stats%age_iso))       deallocate(stats%age_iso)
+        if (allocated(stats%depth_iso))     deallocate(stats%depth_iso)
+        if (allocated(stats%depth_iso_err)) deallocate(stats%depth_iso_err)
+        if (allocated(stats%ice_age))       deallocate(stats%ice_age)
+        if (allocated(stats%ice_age_err))   deallocate(stats%ice_age_err)
+        
         return
 
     end subroutine tracer_deallocate_stats
 
-    
     subroutine tracer_reshape3D(idx_order,x,y,z,ux,uy,uz,x1,y1,z1,ux1,uy1,uz1)
 
         implicit none 
@@ -1106,14 +1163,16 @@ contains
 
     end subroutine tracer_write 
 
-    subroutine tracer_write_stats(trc,time,fldr,filename)
+    subroutine tracer_write_stats(trc,time,fldr,filename,z_srf,H)
         ! Write various meta-tracer information (ie, lagrangian => eulerian)
+        ! This output belongs to a specific time slice, usually at time = 0 ka BP. 
 
         implicit none 
 
         type(tracer_class), intent(IN) :: trc 
         real(prec) :: time
-        character(len=*), intent(IN)   :: fldr, filename 
+        character(len=*),   intent(IN) :: fldr, filename 
+        real(prec),         intent(IN) :: z_srf(:,:), H(:,:) 
 
         ! Local variables 
         integer :: nt, nz 
@@ -1130,12 +1189,29 @@ contains
         call nc_write_dim(path_out,"sigma",x=trc%stats%z)
         call nc_write_dim(path_out,"time", x=time,unlimited=.TRUE.)
 
+        call nc_write_dim(path_out,"depth_norm",x=trc%stats%depth_norm,units="1")
+        call nc_write_dim(path_out,"age_iso",   x=trc%stats%age_iso,   units="ka")
+        
+        call nc_write(path_out,"z_srf",z_srf,dim1="xc",dim2="yc",missing_value=MV, &
+                      units="m",long_name="Surface elevation")
+        call nc_write(path_out,"H",H,dim1="xc",dim2="yc",missing_value=MV, &
+                      units="m",long_name="Ice thickness")
+
 !         call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="sigma",missing_value=int(MV), &
 !                       units="1",long_name="Tracer density (surface)")
         call nc_write(path_out,"dens_srf",trc%stats%density(:,:,nz),dim1="xc",dim2="yc",missing_value=int(MV), &
                       units="1",long_name="Tracer density (surface)")
 
+        call nc_write(path_out,"ice_age",trc%stats%ice_age,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=MV, &
+                      units="ka",long_name="Layer age")
+        call nc_write(path_out,"ice_age_err",trc%stats%ice_age_err,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=MV, &
+                      units="ka",long_name="Layer age - error")
 
+        call nc_write(path_out,"depth_iso",trc%stats%depth_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
+                      units="ka",long_name="Isochrone depth")
+        call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
+                      units="ka",long_name="Isochrone depth - error")
+        
         return 
 
     end subroutine tracer_write_stats
