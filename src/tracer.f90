@@ -666,7 +666,7 @@ contains
         integer :: i, j, k, q
         integer :: nx, ny, nz, nq
         real(prec), allocatable :: dx(:), dy(:) 
-        real(prec) :: dt 
+        real(prec) :: dt, dz 
         real(prec) :: zc(size(z))
         integer       :: id(trc%par%n)
         real(prec)    :: dist(trc%par%n)
@@ -685,6 +685,7 @@ contains
         dy(ny+1) = dy(ny)
         
         dt = 1.0 ! Isochrone uncertainty of 1 ka  
+        dz = (trc%stats%depth_norm(2) - trc%stats%depth_norm(1))/2.0   ! depth_norm is equally spaced
 
         ! Loop over grid and fill in information
         do j = 1, ny 
@@ -712,6 +713,26 @@ contains
 
             end do 
             
+            ! Calculate the ages of each depth value 
+            nq = size(trc%stats%depth_norm)
+            do q = 1, nq 
+                ! Filter for active particles within the grid box and age of interest
+                call which (trc%now%active == 2 .and. &
+                            trc%now%x .gt. x(i)-dx(i) .and. trc%now%x .le. x(i)+dx(i+1) .and. &
+                            trc%now%y .gt. y(j)-dy(j) .and. trc%now%y .le. y(j)+dy(j+1) .and. &
+                            trc%now%dpth/trc%now%H .gt. trc%stats%depth_norm(q)-dz .and. &
+                            trc%now%dpth/trc%now%H .le. trc%stats%depth_norm(q)+dz, inds, n_ind) 
+
+                ! Calculate range mean/sd depth for given age range
+                if (n_ind .gt. 0) then 
+                    trc%stats%ice_age(i,j,q)     = calc_mean(trc%dep%time(inds))
+                    trc%stats%ice_age_err(i,j,q) = calc_sd(trc%dep%time(inds),trc%stats%ice_age(i,j,q))
+                else 
+                    trc%stats%ice_age(i,j,q)     = MV 
+                    trc%stats%ice_age_err(i,j,q) = MV 
+                end if 
+
+            end do 
 
         end do 
         end do  
