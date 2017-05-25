@@ -40,15 +40,14 @@ module tracer
     end type 
 
     type tracer_stats_class
-        real(prec), allocatable :: x(:), y(:), z(:) 
-        integer,    allocatable :: density(:,:,:)
-
+        real(prec), allocatable :: x(:), y(:)
         real(prec), allocatable :: depth_norm(:)
         real(prec), allocatable :: age_iso(:) 
         real(prec), allocatable :: depth_iso(:,:,:)
         real(prec), allocatable :: depth_iso_err(:,:,:)
         real(prec), allocatable :: ice_age(:,:,:)
         real(prec), allocatable :: ice_age_err(:,:,:)
+        integer,    allocatable :: density(:,:,:)
 
     end type
 
@@ -116,11 +115,11 @@ contains
 
         ! Allocate the state variables 
         call tracer_allocate(trc%now,trc%dep,n=trc%par%n)
-        call tracer_allocate_stats(trc%stats,x,y,z)
+        call tracer_allocate_stats(trc%stats,x,y)
 
         ! ===== Initialize stats depth axes ===============
 
-        trc%stats%age_iso = [11.7,29.0,57.0,115.0]
+        trc%stats%age_iso = [1.7,29.0,57.0,115.0]
 
         do i = 1, size(trc%stats%depth_norm)
             trc%stats%depth_norm(i) = 0.04*real(i)
@@ -153,9 +152,9 @@ contains
 
         trc%par%id_max    = 0 
 
-        ! Initialize the time 
-        trc%par%time_now  = time 
-        trc%par%time_dep  = time 
+        ! Initialize the time (to one older than now)
+        trc%par%time_now  = time - 1000.0
+        trc%par%time_dep  = time - 1000.0 
 
         ! Initialize random number generator 
         call random_seed() 
@@ -164,19 +163,16 @@ contains
 
     end subroutine tracer_init
 
-    subroutine tracer_update(par,now,dep,stats,time,x,y,z,z_srf,H,ux,uy,uz,dep_now,order)
+    subroutine tracer_update(trc,time,x,y,z,z_srf,H,ux,uy,uz,dep_now,stats_now,order)
 
         implicit none 
 
-        type(tracer_par_class),   intent(INOUT) :: par 
-        type(tracer_state_class), intent(INOUT) :: now 
-        type(tracer_dep_class),   intent(INOUT) :: dep
-        type(tracer_stats_class), intent(INOUT) :: stats
+        type(tracer_class), intent(INOUT) :: trc 
         real(prec), intent(IN) :: time 
         real(prec), intent(IN) :: x(:), y(:), z(:)
         real(prec), intent(IN) :: z_srf(:,:), H(:,:)
         real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
-        logical, intent(IN) :: dep_now 
+        logical, intent(IN) :: dep_now, stats_now  
         character(len=*), intent(IN), optional :: order 
         
         ! Local variables  
@@ -191,11 +187,11 @@ contains
         real(prec), allocatable :: usig1(:,:,:)
 
         ! Update current time 
-        par%time_old = par%time_now 
-        par%time_now = time 
-        par%dt       = par%time_now - par%time_old 
+        trc%par%time_old = trc%par%time_now 
+        trc%par%time_now = time 
+        trc%par%dt       = trc%par%time_now - trc%par%time_old 
 
-        if (dep_now) par%time_dep = par%time_now 
+        if (dep_now) trc%par%time_dep = trc%par%time_now 
 
         ! Determine order of indices (default ijk)
         idx_order = "ijk"
@@ -227,7 +223,7 @@ contains
             ksrf  = 1 
         end if
 
-        if (trim(par%interp_method) .eq. "spline") then
+        if (trim(trc%par%interp_method) .eq. "spline") then
 
             ! Allocate z-velocity field in sigma coordinates 
             if (allocated(usig1)) deallocate(usig1)
@@ -246,9 +242,9 @@ contains
 
 
         ! Interpolate to the get the right elevation and other deposition quantities
-        do i = 1, par%n 
+        do i = 1, trc%par%n 
 
-            if (now%active(i) .eq. 2) then 
+            if (trc%now%active(i) .eq. 2) then 
 
                 ! == TO DO: We need 3D interpolation here!!!
 
@@ -258,45 +254,45 @@ contains
                 ! 4. Perform trilinear interpolation 
 
                 ! Linear interpolation used for surface position 
-                par_lin      = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
-                now%H(i)     = interp_bilinear(par_lin,H1)
-                now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
-                now%z(i)     = now%z_srf(i) - now%dpth(i)
+                par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
+                trc%now%H(i)     = interp_bilinear(par_lin,H1)
+                trc%now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
+                trc%now%z(i)     = trc%now%z_srf(i) - trc%now%dpth(i)
 
                 ! Calculate zc-axis for the current point
                 ! (z_bedrock + ice thickness)
-                zc = (now%z_srf(i)-now%H(i)) + z1*now%H(i)
+                zc = (trc%now%z_srf(i)-trc%now%H(i)) + z1*trc%now%H(i)
 
 !                 ! Ensure that the tracer z-value is not higher than the surface
-!                 if (now%z(i) .gt. now%z_srf(i)) now%z(i) = now%z_srf(i)
+!                 if (trc%now%z(i) .gt. trc%now%z_srf(i)) trc%now%z(i) = trc%now%z_srf(i)
 
-                if (trim(par%interp_method) .eq. "linear") then 
+                if (trim(trc%par%interp_method) .eq. "linear") then 
                     ! Trilinear interpolation 
 
-                    par_lin = interp_trilinear_weights(x1,y1,zc,xout=now%x(i),yout=now%y(i),zout=now%z(i))
+                    par_lin = interp_trilinear_weights(x1,y1,zc,xout=trc%now%x(i),yout=trc%now%y(i),zout=trc%now%z(i))
 
-                    now%ux(i)  = interp_trilinear(par_lin,ux1)
-                    now%uy(i)  = interp_trilinear(par_lin,uy1)
-                    now%uz(i)  = interp_trilinear(par_lin,uz1)
+                    trc%now%ux(i)  = interp_trilinear(par_lin,ux1)
+                    trc%now%uy(i)  = interp_trilinear(par_lin,uy1)
+                    trc%now%uz(i)  = interp_trilinear(par_lin,uz1)
 
-    !                 now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
-    !                 now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
-    !                 now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
+    !                 trc%now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
+    !                 trc%now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
+    !                 trc%now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
     !                 ! Until trilinear interp is ready, maintain z-position at surface
-    !                 now%z(i)   = interp_bilinear(par_lin,z_srf1)
+    !                 trc%now%z(i)   = interp_bilinear(par_lin,z_srf1)
 
                 else
                     ! Spline interpolation 
-                    now%ux(i) = interp_bspline3D(bspline3d_ux,now%x(i),now%y(i),now%z(i)/now%H(i))
-                    now%uy(i) = interp_bspline3D(bspline3d_uy,now%x(i),now%y(i),now%z(i)/now%H(i))
-                    now%uz(i) = interp_bspline3D(bspline3d_uz,now%x(i),now%y(i),now%z(i)/now%H(i)) *now%H(i)  ! sigma => m
+                    trc%now%ux(i) = interp_bspline3D(bspline3d_ux,trc%now%x(i),trc%now%y(i),trc%now%z(i)/trc%now%H(i))
+                    trc%now%uy(i) = interp_bspline3D(bspline3d_uy,trc%now%x(i),trc%now%y(i),trc%now%z(i)/trc%now%H(i))
+                    trc%now%uz(i) = interp_bspline3D(bspline3d_uz,trc%now%x(i),trc%now%y(i),trc%now%z(i)/trc%now%H(i)) *trc%now%H(i)  ! sigma => m
 
                 end if 
 
-                now%T(i)   = 260.0 
-                now%thk(i) = 0.3 
+                trc%now%T(i)   = 260.0 
+                trc%now%thk(i) = 0.3 
 
-!                 write(*,*) i, now%z(i), now%uz(i), maxval(zc), maxval(z1)
+!                 write(*,*) i, trc%now%z(i), trc%now%uz(i), maxval(zc), maxval(z1)
 
             end if 
 
@@ -306,47 +302,47 @@ contains
         ! == TO DO == 
 
         ! Update the tracer positions 
-        call calc_position(now%x,now%y,now%z,now%ux,now%uy,now%uz,par%dt,now%active)
-!         call calc_position(now%x,now%y,now%dpth,now%ux,now%uy,-now%uz,par%dt,now%active)
-        now%dpth = max(now%z_srf - now%z, 0.0) 
+        call calc_position(trc%now%x,trc%now%y,trc%now%z,trc%now%ux,trc%now%uy,trc%now%uz,trc%par%dt,trc%now%active)
+!         call calc_position(trc%now%x,trc%now%y,trc%now%dpth,trc%now%ux,trc%now%uy,-trc%now%uz,trc%par%dt,trc%now%active)
+        trc%now%dpth = max(trc%now%z_srf - trc%now%z, 0.0) 
 
         ! Destroy points that moved outside the valid region 
-        call tracer_deactivate(par,now,x1,y1,maxval(H1))
+        call tracer_deactivate(trc%par,trc%now,x1,y1,maxval(H1))
 
         ! Activate new tracers if desired
-        if (dep_now) call tracer_activate(par,now,x1,y1,H=H1,nmax=par%n_max_dep)
+        if (dep_now) call tracer_activate(trc%par,trc%now,x1,y1,H=H1,nmax=trc%par%n_max_dep)
 
         ! Finish activation for necessary points 
-        do i = 1, par%n 
+        do i = 1, trc%par%n 
 
-            if (now%active(i) .eq. 1) then 
+            if (trc%now%active(i) .eq. 1) then 
                 ! Point became active now, further initializations needed below
 
                 ! Point is at the surface, so only bilinear interpolation is needed
-                par_lin = interp_bilinear_weights(x1,y1,xout=now%x(i),yout=now%y(i))
+                par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
 
                 ! Apply interpolation weights to variables
-                now%dpth(i)  = 1.0   ! Always deposit below the surface (eg 1 m) to avoid zero z-velocity
-                now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
-                now%z(i)     = now%z_srf(i)-now%dpth(i)
+                trc%now%dpth(i)  = 1.0   ! Always deposit below the surface (eg 1 m) to avoid zero z-velocity
+                trc%now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
+                trc%now%z(i)     = trc%now%z_srf(i)-trc%now%dpth(i)
                 
-                now%H(i)     = interp_bilinear(par_lin,H1)
-                now%ux(i)    = interp_bilinear(par_lin,ux1(:,:,ksrf))
-                now%uy(i)    = interp_bilinear(par_lin,uy1(:,:,ksrf))
-                now%uz(i)    = interp_bilinear(par_lin,uz1(:,:,ksrf)) 
+                trc%now%H(i)     = interp_bilinear(par_lin,H1)
+                trc%now%ux(i)    = interp_bilinear(par_lin,ux1(:,:,ksrf))
+                trc%now%uy(i)    = interp_bilinear(par_lin,uy1(:,:,ksrf))
+                trc%now%uz(i)    = interp_bilinear(par_lin,uz1(:,:,ksrf)) 
 
                 ! Initialize state variables
-                now%T(i)   = 260.0 
-                now%thk(i) = 0.3 
+                trc%now%T(i)   = 260.0 
+                trc%now%thk(i) = 0.3 
 
                 ! Define deposition values 
-                dep%time(i) = par%time_now 
-                dep%H(i)    = now%H(i)
-                dep%x(i)    = now%x(i)
-                dep%y(i)    = now%y(i)
-                dep%z(i)    = now%z(i) 
+                trc%dep%time(i) = trc%par%time_now 
+                trc%dep%H(i)    = trc%now%H(i)
+                trc%dep%x(i)    = trc%now%x(i)
+                trc%dep%y(i)    = trc%now%y(i)
+                trc%dep%z(i)    = trc%now%z(i) 
 
-                now%active(i) = 2 
+                trc%now%active(i) = 2 
 
             end if 
 
@@ -361,11 +357,10 @@ contains
         !   to be stored from the main program. 
 
         ! Update summary statistics 
-        par%n_active = count(now%active.gt.0)
+        trc%par%n_active = count(trc%now%active.gt.0)
 
-        ! Calculate density 
-        stats%density = 0 
-        stats%density(:,:,nz) = calc_tracer_density(par,now,x1,y1,z_srf1)
+        ! Calculate some summary information on eulerian grid if desired 
+        if (stats_now) call calc_tracer_stats(trc,x,y,z,z_srf,H)
 
         return 
 
@@ -596,63 +591,6 @@ contains
 
     end function gen_distribution
 
-    function calc_tracer_density(par,now,x,y,z_srf) result(dens)
-        ! Check tracer density near the surface
-        ! (to avoid depositing too many particles in the same place)
-        
-        implicit none
-        
-        type(tracer_par_class) :: par
-        type(tracer_state_class), intent(IN) :: now
-        real(prec), intent(IN) :: x(:), y(:), z_srf(:,:)
-        integer :: dens(size(x),size(y))
-        
-        integer :: i, j, k
-        integer :: nx, ny
-        
-        nx = size(x)
-        ny = size(y)
-        
-        ! Set initial density to zero everywhere
-        dens = 0
-        
-        ! Loop over active points, count surface density 
-        ! at each grid point
-        do k = 1, par%n_active
-            
-            do i = 1, nx
-                if (x(i) .gt. now%x(k)) exit
-            end do
-            if (i .gt. nx) then 
-                i = nx
-            else if (i .gt. 1) then
-                if ( (now%x(k)-x(i-1))/(x(i)-x(i-1)) .lt. 0.5 ) i = i-1
-            end if
-
-            do j = 1, ny
-                if (y(j) .gt. now%y(k)) exit
-            end do
-            if (j .gt. ny) then
-                j = ny 
-            else if (i .gt. 1) then
-                if ( (now%y(k)-y(j-1))/(y(j)-y(j-1)) .lt. 0.5 ) j = j-1
-            end if
-
-            if (abs(z_srf(i,j)-now%z(k)) .lt. par%dens_z_lim) then
-                ! If point is near surface, add it to density
-               dens(i,j) = dens(i,j)+1
-            end if
-            
-            
-        end do
-          
-        
-                
-                
-        return
-
-    end function calc_tracer_density
-
     subroutine calc_tracer_stats(trc,x,y,z,z_srf,H)
         ! Convert tracer information to isochrone format matching
         ! Macgregor et al. (2015)
@@ -677,15 +615,20 @@ contains
         ny = size(y)
         
         allocate(dx(nx+1),dy(ny+1))
-        dx(2:nx) = x(2:nx)-x(1:nx-1)
+        dx(2:nx) = (x(2:nx)-x(1:nx-1))/2.0
         dx(1)    = dx(2)
         dx(nx+1) = dx(nx)
-        dy(2:ny) = x(2:ny)-x(1:ny-1)
+        dy(2:ny) = (y(2:ny)-y(1:ny-1))/2.0
         dy(1)    = dy(2)
         dy(ny+1) = dy(ny)
         
         dt = 1.0 ! Isochrone uncertainty of 1 ka  
         dz = (trc%stats%depth_norm(2) - trc%stats%depth_norm(1))/2.0   ! depth_norm is equally spaced
+
+        write(*,*) "calc_tracer_stats:: "
+        write(*,*) "range(dx): ", minval(dx), maxval(dx) 
+        write(*,*) "range(dy): ", minval(dy), maxval(dy) 
+        write(*,*) "dt, dz   : ", dt, dz 
 
         ! Loop over grid and fill in information
         do j = 1, ny 
@@ -702,6 +645,8 @@ contains
                             (0.0 - trc%dep%time)*1e-3 .ge. trc%stats%age_iso(q)-dt .and. &
                             (0.0 - trc%dep%time)*1e-3 .le. trc%stats%age_iso(q)+dt, inds, n_ind) 
 
+                write(*,*) "isochrones: ", i, j, q, n_ind 
+
                 ! Calculate range mean/sd depth for given age range
                 if (n_ind .gt. 0) then 
                     trc%stats%depth_iso(i,j,q)     = calc_mean(trc%now%dpth(inds))
@@ -713,15 +658,18 @@ contains
 
             end do 
             
-            ! Calculate the ages of each depth value 
+            ! Calculate the ages of each depth layer 
             nq = size(trc%stats%depth_norm)
             do q = 1, nq 
+
                 ! Filter for active particles within the grid box and age of interest
                 call which (trc%now%active == 2 .and. &
                             trc%now%x .gt. x(i)-dx(i) .and. trc%now%x .le. x(i)+dx(i+1) .and. &
                             trc%now%y .gt. y(j)-dy(j) .and. trc%now%y .le. y(j)+dy(j+1) .and. &
                             trc%now%dpth/trc%now%H .gt. trc%stats%depth_norm(q)-dz .and. &
                             trc%now%dpth/trc%now%H .le. trc%stats%depth_norm(q)+dz, inds, n_ind) 
+
+                write(*,*) "ice_ages: ", i, j, q, n_ind 
 
                 ! Calculate range mean/sd depth for given age range
                 if (n_ind .gt. 0) then 
@@ -732,11 +680,18 @@ contains
                     trc%stats%ice_age_err(i,j,q) = MV 
                 end if 
 
+                ! Also calculate density of tracers
+                if (H(i,j) .gt. 1.0) then 
+                    trc%stats%density(i,j,q) = n_ind 
+                else
+                    trc%stats%density(i,j,q) = MV 
+                end if 
+
             end do 
 
         end do 
         end do  
-                
+        
         return
 
     end subroutine calc_tracer_stats
@@ -913,49 +868,40 @@ contains
 
     end subroutine tracer_deallocate
 
-    subroutine tracer_allocate_stats(stats,x,y,z)
+    subroutine tracer_allocate_stats(stats,x,y)
 
         implicit none 
 
         type(tracer_stats_class), intent(INOUT) :: stats 
-        real(prec), intent(IN) :: x(:), y(:), z(:)
+        real(prec), intent(IN) :: x(:), y(:)
         
-        real(prec) :: z1(size(z))
-        integer    :: nz 
-
-        ! Determine ascending z-axis order 
-        nz = size(z)
-        z1 = z 
-        if (z(1) .gt. z(nz)) z1 = z(nz:1)
-
         ! Make surce object is deallocated
         call tracer_deallocate_stats(stats)
 
         ! Allocate tracer stats axes
         allocate(stats%x(size(x)))
         allocate(stats%y(size(y)))
-        allocate(stats%z(size(z)))
 
         ! Allocate tracer stats objects
-        allocate(stats%density(size(x),size(y),size(z)))
-
-        ! Also store axis information directly
-        stats%x = x 
-        stats%y = y 
-        stats%z = z1 ! Always ascending axis
-
         allocate(stats%depth_norm(25))  ! To match Macgregor et al. (2015)
         allocate(stats%age_iso(4))      ! To match Macgregor et al. (2015)
         allocate(stats%depth_iso(size(x),size(y),size(stats%age_iso)))
         allocate(stats%depth_iso_err(size(x),size(y),size(stats%age_iso)))
         allocate(stats%ice_age(size(x),size(y),size(stats%depth_norm)))
         allocate(stats%ice_age_err(size(x),size(y),size(stats%depth_norm)))
-        
+        allocate(stats%density(size(x),size(y),size(stats%depth_norm)))
+
+        ! Also store axis information directly
+        stats%x = x 
+        stats%y = y 
+
+        ! Initialize arrays to zeros 
         stats%depth_iso     = 0.0 
         stats%depth_iso_err = 0.0 
         stats%ice_age       = 0.0 
         stats%ice_age_err   = 0.0 
-        
+        stats%density       = 0.0 
+
         return
 
     end subroutine tracer_allocate_stats
@@ -967,15 +913,16 @@ contains
         type(tracer_stats_class), intent(INOUT) :: stats 
 
         ! Deallocate stats objects
-        if (allocated(stats%density))       deallocate(stats%density)
-
+        if (allocated(stats%x))             deallocate(stats%x)
+        if (allocated(stats%y))             deallocate(stats%y)
         if (allocated(stats%depth_norm))    deallocate(stats%depth_norm)
         if (allocated(stats%age_iso))       deallocate(stats%age_iso)
         if (allocated(stats%depth_iso))     deallocate(stats%depth_iso)
         if (allocated(stats%depth_iso_err)) deallocate(stats%depth_iso_err)
         if (allocated(stats%ice_age))       deallocate(stats%ice_age)
         if (allocated(stats%ice_age_err))   deallocate(stats%ice_age_err)
-        
+        if (allocated(stats%density))       deallocate(stats%density)
+
         return
 
     end subroutine tracer_deallocate_stats
@@ -1228,7 +1175,7 @@ contains
 
     end subroutine tracer_write 
 
-    subroutine tracer_write_stats(trc,time,fldr,filename,z_srf,H)
+    subroutine tracer_write_stats(trc,time,fldr,filename) !,z_srf,H)
         ! Write various meta-tracer information (ie, lagrangian => eulerian)
         ! This output belongs to a specific time slice, usually at time = 0 ka BP. 
 
@@ -1237,7 +1184,7 @@ contains
         type(tracer_class), intent(IN) :: trc 
         real(prec) :: time
         character(len=*),   intent(IN) :: fldr, filename 
-        real(prec),         intent(IN) :: z_srf(:,:), H(:,:) 
+!         real(prec),         intent(IN) :: z_srf(:,:), H(:,:) 
 
         ! Local variables 
         integer :: nt, nz 
@@ -1249,23 +1196,16 @@ contains
 
         ! Create output file 
         call nc_create(path_out)
-        call nc_write_dim(path_out,"xc",   x=trc%stats%x*1e-3,units="km")
-        call nc_write_dim(path_out,"yc",   x=trc%stats%y*1e-3,units="km")
-        call nc_write_dim(path_out,"sigma",x=trc%stats%z)
-        call nc_write_dim(path_out,"time", x=time,unlimited=.TRUE.)
-
-        call nc_write_dim(path_out,"depth_norm",x=trc%stats%depth_norm,units="1")
-        call nc_write_dim(path_out,"age_iso",   x=trc%stats%age_iso,   units="ka")
+        call nc_write_dim(path_out,"xc",        x=trc%stats%x*1e-3,     units="km")
+        call nc_write_dim(path_out,"yc",        x=trc%stats%y*1e-3,     units="km")
+        call nc_write_dim(path_out,"depth_norm",x=trc%stats%depth_norm, units="1")
+        call nc_write_dim(path_out,"age_iso",   x=trc%stats%age_iso,    units="ka")
+        call nc_write_dim(path_out,"time",      x=time,unlimited=.TRUE.,units="ka")
         
-        call nc_write(path_out,"z_srf",z_srf,dim1="xc",dim2="yc",missing_value=MV, &
-                      units="m",long_name="Surface elevation")
-        call nc_write(path_out,"H",H,dim1="xc",dim2="yc",missing_value=MV, &
-                      units="m",long_name="Ice thickness")
-
-!         call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="sigma",missing_value=int(MV), &
-!                       units="1",long_name="Tracer density (surface)")
-        call nc_write(path_out,"dens_srf",trc%stats%density(:,:,nz),dim1="xc",dim2="yc",missing_value=int(MV), &
-                      units="1",long_name="Tracer density (surface)")
+!         call nc_write(path_out,"z_srf",z_srf,dim1="xc",dim2="yc",missing_value=MV, &
+!                       units="m",long_name="Surface elevation")
+!         call nc_write(path_out,"H",H,dim1="xc",dim2="yc",missing_value=MV, &
+!                       units="m",long_name="Ice thickness")
 
         call nc_write(path_out,"ice_age",trc%stats%ice_age,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=MV, &
                       units="ka",long_name="Layer age")
@@ -1277,6 +1217,9 @@ contains
         call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
                       units="ka",long_name="Isochrone depth - error")
         
+        call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=int(MV), &
+                      units="1",long_name="Tracer density")
+
         return 
 
     end subroutine tracer_write_stats

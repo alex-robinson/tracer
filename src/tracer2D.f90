@@ -45,19 +45,16 @@ contains
     end subroutine tracer2D_init
 
 
-    subroutine tracer2D_update(par,now,dep,stats,time,x,z,z_srf,H,ux,uz,dep_now)
+    subroutine tracer2D_update(trc,time,x,z,z_srf,H,ux,uz,dep_now,stats_now)
 
         implicit none 
 
-        type(tracer_par_class),   intent(INOUT) :: par 
-        type(tracer_state_class), intent(INOUT) :: now 
-        type(tracer_dep_class),   intent(INOUT) :: dep
-        type(tracer_stats_class), intent(INOUT) :: stats
+        type(tracer_class), intent(INOUT) :: trc 
         real(prec), intent(IN) :: time 
         real(prec), intent(IN) :: x(:), z(:)
         real(prec), intent(IN) :: z_srf(:), H(:)
         real(prec), intent(IN) :: ux(:,:), uz(:,:)
-        logical,    intent(IN) :: dep_now 
+        logical,    intent(IN) :: dep_now, stats_now  
         ! Local variables
         real(prec) :: y(2) 
         real(prec), allocatable :: z_srf_2D(:,:), H_2D(:,:)
@@ -84,7 +81,7 @@ contains
         end do 
 
         ! Now update tracers using 3D call 
-        call tracer_update(par,now,dep,stats,time,x,y,z,z_srf_2D,H_2D,ux_3D,uy_3D,uz_3D,dep_now)
+        call tracer_update(trc,time,x,y,z,z_srf_2D,H_2D,ux_3D,uy_3D,uz_3D,dep_now,stats_now)
 
         return 
 
@@ -189,13 +186,14 @@ contains
 
     end subroutine tracer2D_write 
 
-    subroutine tracer2D_write_stats(trc,time,fldr,filename)
+    subroutine tracer2D_write_stats(trc,time,fldr,filename) !,z_srf,H)
 
         implicit none 
 
         type(tracer_class), intent(IN) :: trc 
         real(prec) :: time
         character(len=*), intent(IN)   :: fldr, filename 
+!         real(prec),         intent(IN) :: z_srf(:), H(:) 
 
         ! Local variables 
         integer :: nt 
@@ -205,15 +203,29 @@ contains
 
         ! Create output file 
         call nc_create(path_out)
-        call nc_write_dim(path_out,"xc",   x=trc%stats%x*1e-3)
-        call nc_write_dim(path_out,"sigma",x=trc%stats%z)
-        call nc_write_dim(path_out,"time",x=time,unlimited=.TRUE.)
+        call nc_write_dim(path_out,"xc",        x=trc%stats%x*1e-3,     units="km")
+        call nc_write_dim(path_out,"depth_norm",x=trc%stats%depth_norm, units="1")
+        call nc_write_dim(path_out,"age_iso",   x=trc%stats%age_iso,    units="ka")
+        call nc_write_dim(path_out,"time",      x=time,unlimited=.TRUE.,units="ka")
+        
+!         call nc_write(path_out,"z_srf",z_srf,dim1="xc",missing_value=MV, &
+!                       units="m",long_name="Surface elevation")
+!         call nc_write(path_out,"H",H,dim1="xc",missing_value=MV, &
+!                       units="m",long_name="Ice thickness")
 
-!         call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="sigma",missing_value=int(MV), &
-!                       units="1",long_name="Tracer density (surface)")
-        call nc_write(path_out,"dens_srf",trc%stats%density(:,1,1),dim1="xc",missing_value=int(MV), &
-                      units="1",long_name="Tracer density (surface)")
+        call nc_write(path_out,"ice_age",trc%stats%ice_age(:,1,:),dim1="xc",dim2="depth_norm",missing_value=MV, &
+                      units="ka",long_name="Layer age")
+        call nc_write(path_out,"ice_age_err",trc%stats%ice_age_err(:,1,:),dim1="xc",dim2="depth_norm",missing_value=MV, &
+                      units="ka",long_name="Layer age - error")
 
+        call nc_write(path_out,"depth_iso",trc%stats%depth_iso(:,1,:),dim1="xc",dim2="age_iso",missing_value=MV, &
+                      units="ka",long_name="Isochrone depth")
+        call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err(:,1,:),dim1="xc",dim2="age_iso",missing_value=MV, &
+                      units="ka",long_name="Isochrone depth - error")
+        
+        call nc_write(path_out,"density",trc%stats%density(:,1,:),dim1="xc",dim2="depth_norm",missing_value=int(MV), &
+                      units="1",long_name="Tracer density")
+        
         return 
 
     end subroutine tracer2D_write_stats
