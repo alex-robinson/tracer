@@ -1118,7 +1118,7 @@ contains
 
         implicit none 
 
-        type(tracer_class), intent(IN) :: trc 
+        type(tracer_class), intent(INOUT) :: trc 
         real(prec) :: time 
         character(len=*), intent(IN)   :: fldr, filename 
 
@@ -1129,6 +1129,8 @@ contains
         character(len=512) :: path_out 
 
         real(prec) :: tmp(size(trc%now%x))
+
+        trc%par%time_write = time 
 
         path_out = trim(fldr)//"/"//trim(filename)
 
