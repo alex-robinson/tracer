@@ -1142,6 +1142,8 @@ contains
 
         call nc_write(path_out,"time",time,dim1="time",start=[nt],count=[1],missing_value=MV)
         
+        call nc_write(path_out,"n_active",trc%par%n_active,dim1="time",start=[nt],count=[1],missing_value=int(MV))
+        
         tmp = trc%now%x
         where(trc%now%x .ne. MV) tmp = trc%now%x*1e-3
         call nc_write(path_out,"x",tmp,dim1="pt",dim2="time", missing_value=MV, &
