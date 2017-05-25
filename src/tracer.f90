@@ -627,19 +627,7 @@ contains
         
         dt = 1.0 ! Isochrone uncertainty of 1 ka  
         dz = (trc%stats%depth_norm(2) - trc%stats%depth_norm(1))/2.0   ! depth_norm is equally spaced
-
-        write(*,*) "calc_tracer_stats:: "
-        write(*,*) "range(dx): ", minval(dx), maxval(dx) 
-        write(*,*) "range(dy): ", minval(dy), maxval(dy) 
-        write(*,*) "dt, dz   : ", dt, dz 
-
-        write(*,*) "range(dep_time):     ", minval(trc%dep%time,mask=trc%now%active==2)*1e-3, &
-                                            maxval(trc%dep%time,mask=trc%now%active==2)*1e-3
-        write(*,*) "  range(depth):      ", minval(trc%now%dpth,mask=trc%now%active==2), &
-                                            maxval(trc%now%dpth,mask=trc%now%active==2)
-        write(*,*) "  range(depth_norm): ", minval(trc%now%dpth/trc%now%H,mask=trc%now%active==2), &
-                                            maxval(trc%now%dpth/trc%now%H,mask=trc%now%active==2)
-
+        
         ! Loop over grid and fill in information
         do j = 1, ny 
         do i = 1, nx 
