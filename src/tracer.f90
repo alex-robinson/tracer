@@ -14,7 +14,7 @@ module tracer
         integer :: n, n_active, n_max_dep, id_max 
         logical :: is_sigma                     ! Is the defined z-axis in sigma coords
         real(prec) :: time_now, time_old, dt
-        real(prec) :: time_dep  
+        real(prec) :: time_dep, time_write 
         real(prec) :: thk_min                   ! Minimum thickness of tracer (m)
         real(prec) :: H_min                     ! Minimum ice thickness to track (m)
         real(prec) :: depth_max                 ! Maximum depth of tracer (fraction)
@@ -48,6 +48,8 @@ module tracer
         real(prec), allocatable :: ice_age(:,:,:)
         real(prec), allocatable :: ice_age_err(:,:,:)
         integer,    allocatable :: density(:,:,:)
+        integer,    allocatable :: density_iso(:,:,:)
+        
 
     end type
 
@@ -119,7 +121,7 @@ contains
 
         ! ===== Initialize stats depth axes ===============
 
-        trc%stats%age_iso = [1.7,29.0,57.0,115.0]
+        trc%stats%age_iso = [11.7,29.0,57.0,115.0,130.0]
 
         do i = 1, size(trc%stats%depth_norm)
             trc%stats%depth_norm(i) = 0.04*real(i)
@@ -153,8 +155,9 @@ contains
         trc%par%id_max    = 0 
 
         ! Initialize the time (to one older than now)
-        trc%par%time_now  = time - 1000.0
-        trc%par%time_dep  = time - 1000.0 
+        trc%par%time_now   = time - 1000.0
+        trc%par%time_dep   = time - 1000.0 
+        trc%par%time_write = time - 1000.0 
 
         ! Initialize random number generator 
         call random_seed() 
@@ -604,7 +607,7 @@ contains
         integer :: i, j, k, q
         integer :: nx, ny, nz, nq
         real(prec), allocatable :: dx(:), dy(:) 
-        real(prec) :: dt, dz 
+        real(prec) :: dt, dz, dz_now  
         real(prec) :: zc(size(z))
         integer       :: id(trc%par%n)
         real(prec)    :: dist(trc%par%n)
@@ -630,6 +633,13 @@ contains
         write(*,*) "range(dy): ", minval(dy), maxval(dy) 
         write(*,*) "dt, dz   : ", dt, dz 
 
+        write(*,*) "range(dep_time):     ", minval(trc%dep%time,mask=trc%now%active==2)*1e-3, &
+                                            maxval(trc%dep%time,mask=trc%now%active==2)*1e-3
+        write(*,*) "  range(depth):      ", minval(trc%now%dpth,mask=trc%now%active==2), &
+                                            maxval(trc%now%dpth,mask=trc%now%active==2)
+        write(*,*) "  range(depth_norm): ", minval(trc%now%dpth/trc%now%H,mask=trc%now%active==2), &
+                                            maxval(trc%now%dpth/trc%now%H,mask=trc%now%active==2)
+
         ! Loop over grid and fill in information
         do j = 1, ny 
         do i = 1, nx 
@@ -645,15 +655,18 @@ contains
                             (0.0 - trc%dep%time)*1e-3 .ge. trc%stats%age_iso(q)-dt .and. &
                             (0.0 - trc%dep%time)*1e-3 .le. trc%stats%age_iso(q)+dt, inds, n_ind) 
 
-                write(*,*) "isochrones: ", i, j, q, n_ind 
-
                 ! Calculate range mean/sd depth for given age range
-                if (n_ind .gt. 0) then 
+                if (n_ind .gt. 0) then
+                    write(*,*) "isochrones: ", i, j, q, n_ind 
+ 
                     trc%stats%depth_iso(i,j,q)     = calc_mean(trc%now%dpth(inds))
                     trc%stats%depth_iso_err(i,j,q) = calc_sd(trc%now%dpth(inds),trc%stats%depth_iso(i,j,q))
+                    trc%stats%density_iso(i,j,q)   = n_ind 
                 else 
                     trc%stats%depth_iso(i,j,q)     = MV 
-                    trc%stats%depth_iso_err(i,j,q) = MV 
+                    trc%stats%depth_iso_err(i,j,q) = MV
+                    trc%stats%density_iso(i,j,q)   = MV
+ 
                 end if 
 
             end do 
@@ -662,30 +675,29 @@ contains
             nq = size(trc%stats%depth_norm)
             do q = 1, nq 
 
+                ! Use dz_now to ensure that the first depth (0.04) includes all depths to the surface
+                dz_now = dz 
+                if (q .eq. 1) dz_now = dz*5.0 
+
                 ! Filter for active particles within the grid box and age of interest
                 call which (trc%now%active == 2 .and. &
                             trc%now%x .gt. x(i)-dx(i) .and. trc%now%x .le. x(i)+dx(i+1) .and. &
                             trc%now%y .gt. y(j)-dy(j) .and. trc%now%y .le. y(j)+dy(j+1) .and. &
-                            trc%now%dpth/trc%now%H .gt. trc%stats%depth_norm(q)-dz .and. &
+                            trc%now%dpth/trc%now%H .gt. trc%stats%depth_norm(q)-dz_now  .and. &
                             trc%now%dpth/trc%now%H .le. trc%stats%depth_norm(q)+dz, inds, n_ind) 
 
-                write(*,*) "ice_ages: ", i, j, q, n_ind 
-
-                ! Calculate range mean/sd depth for given age range
-                if (n_ind .gt. 0) then 
-                    trc%stats%ice_age(i,j,q)     = calc_mean(trc%dep%time(inds))
-                    trc%stats%ice_age_err(i,j,q) = calc_sd(trc%dep%time(inds),trc%stats%ice_age(i,j,q))
+                ! Calculate range mean/sd age for given depth range
+                if (n_ind .gt. 0) then
+                    write(*,*) "ice_ages: ", i, j, q, n_ind 
+ 
+                    trc%stats%ice_age(i,j,q)     = calc_mean(trc%dep%time(inds))*1e-3
+                    trc%stats%ice_age_err(i,j,q) = calc_sd(trc%dep%time(inds),trc%stats%ice_age(i,j,q))*1e-3
+                    trc%stats%density(i,j,q)     = n_ind 
                 else 
                     trc%stats%ice_age(i,j,q)     = MV 
                     trc%stats%ice_age_err(i,j,q) = MV 
-                end if 
-
-                ! Also calculate density of tracers
-                if (H(i,j) .gt. 1.0) then 
-                    trc%stats%density(i,j,q) = n_ind 
-                else
-                    trc%stats%density(i,j,q) = MV 
-                end if 
+                    trc%stats%density(i,j,q)     = MV 
+                end if  
 
             end do 
 
@@ -884,12 +896,13 @@ contains
 
         ! Allocate tracer stats objects
         allocate(stats%depth_norm(25))  ! To match Macgregor et al. (2015)
-        allocate(stats%age_iso(4))      ! To match Macgregor et al. (2015)
+        allocate(stats%age_iso(5))      ! To match Macgregor et al. (2015)
         allocate(stats%depth_iso(size(x),size(y),size(stats%age_iso)))
         allocate(stats%depth_iso_err(size(x),size(y),size(stats%age_iso)))
         allocate(stats%ice_age(size(x),size(y),size(stats%depth_norm)))
         allocate(stats%ice_age_err(size(x),size(y),size(stats%depth_norm)))
         allocate(stats%density(size(x),size(y),size(stats%depth_norm)))
+        allocate(stats%density_iso(size(x),size(y),size(stats%age_iso)))
 
         ! Also store axis information directly
         stats%x = x 
@@ -900,7 +913,8 @@ contains
         stats%depth_iso_err = 0.0 
         stats%ice_age       = 0.0 
         stats%ice_age_err   = 0.0 
-        stats%density       = 0.0 
+        stats%density       = MV 
+        stats%density_iso   = MV 
 
         return
 
@@ -922,6 +936,7 @@ contains
         if (allocated(stats%ice_age))       deallocate(stats%ice_age)
         if (allocated(stats%ice_age_err))   deallocate(stats%ice_age_err)
         if (allocated(stats%density))       deallocate(stats%density)
+        if (allocated(stats%density_iso))   deallocate(stats%density_iso)
 
         return
 
@@ -1187,10 +1202,7 @@ contains
 !         real(prec),         intent(IN) :: z_srf(:,:), H(:,:) 
 
         ! Local variables 
-        integer :: nt, nz 
         character(len=512) :: path_out 
-
-        nz = size(trc%stats%density,3)
 
         path_out = trim(fldr)//"/"//trim(filename)
 
@@ -1211,15 +1223,17 @@ contains
                       units="ka",long_name="Layer age")
         call nc_write(path_out,"ice_age_err",trc%stats%ice_age_err,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=MV, &
                       units="ka",long_name="Layer age - error")
+        call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=int(MV), &
+                      units="1",long_name="Tracer density")
 
         call nc_write(path_out,"depth_iso",trc%stats%depth_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
                       units="ka",long_name="Isochrone depth")
         call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
                       units="ka",long_name="Isochrone depth - error")
-        
-        call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=int(MV), &
-                      units="1",long_name="Tracer density")
+        call nc_write(path_out,"density_iso",trc%stats%density_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=int(MV), &
+                      units="1",long_name="Tracer density (for isochrones)")
 
+        
         return 
 
     end subroutine tracer_write_stats
