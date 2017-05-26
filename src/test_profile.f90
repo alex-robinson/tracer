@@ -47,7 +47,7 @@ program tracertest
     dt       = 5.0 
 
     ! Initialize tracer and output file 
-    call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,z=prof1%sigma,is_sigma=.TRUE.)
+    call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,filename)
 
     dt_write = 10000.0 
@@ -65,9 +65,9 @@ program tracertest
         write(*,*) "time = ", time, trc1%par%n_active
 
 
-        call tracer2D_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
+        call tracer2D_update(trc1,time=time, &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
-                             ux=prof1%ux*0.0,uz=prof1%uz,dep_now=dep_now)
+                             ux=prof1%ux*0.0,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
 
         if (k .gt. 1) dt_write_now = dt_write_now+dt 
         if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
@@ -182,7 +182,7 @@ contains
         
 !         ! Write summary 
 !         write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 
-!         write(*,"(a,500f8.2)") "sigma: ", prof%sigma 
+        write(*,"(a,500f8.2)") "sigma: ", prof%sigma 
 !         write(*,"(a,f10.2)") "H0 = ", H0 
 !         write(*,"(a,2f10.2)") "range(ux): ", minval(prof%ux), maxval(prof%ux)
 !         write(*,"(a,2f10.2)") "range(uz): ", minval(prof%uz), maxval(prof%uz) 

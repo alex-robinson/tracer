@@ -102,13 +102,13 @@ module tracer
 
 contains 
 
-    subroutine tracer_init(trc,filename,time,x,y,z,is_sigma)
+    subroutine tracer_init(trc,filename,time,x,y,is_sigma)
 
         implicit none 
 
         type(tracer_class),   intent(OUT) :: trc 
         character(len=*),     intent(IN)  :: filename 
-        real(prec), intent(IN) :: x(:), y(:), z(:)
+        real(prec), intent(IN) :: x(:), y(:)
         logical,    intent(IN) :: is_sigma  
         real(4) :: time 
 
@@ -169,7 +169,7 @@ contains
 
     end subroutine tracer_init
 
-    subroutine tracer_update(trc,time,x,y,z,z_srf,H,ux,uy,uz,dep_now,stats_now,order)
+    subroutine tracer_update(trc,time,x,y,z,z_srf,H,ux,uy,uz,dep_now,stats_now,order,sigma_srf)
 
         implicit none 
 
@@ -180,16 +180,16 @@ contains
         real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
         logical, intent(IN) :: dep_now, stats_now  
         character(len=*), intent(IN), optional :: order 
-        
+        real(prec), intent(IN), optional :: sigma_srf     ! Value at surface by default (1 or 0?)
+
         ! Local variables  
         character(len=3) :: idx_order 
         real(prec) :: zc(size(z))   ! Actual cartesian z-axis after applying sigma*H 
-        integer    :: i, j, k, nx, ny, nz, ksrf, kbase  
+        integer    :: i, j, k, nx, ny, nz
+        logical    :: rev_z 
         real(prec), allocatable :: x1(:), y1(:), z1(:)
         real(prec), allocatable :: z_srf1(:,:), H1(:,:)
         real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
-        logical :: z_descending 
-
         real(prec), allocatable :: usig1(:,:,:)
 
         ! Update current time 
@@ -203,31 +203,36 @@ contains
         idx_order = "ijk"
         if (present(order)) idx_order = trim(order)
 
-        ! Also determine whether z-axis is ascending or descending 
-        call tracer_reshape3D(idx_order,x,y,z,ux,uy,uz,x1,y1,z1,ux1,uy1,uz1)
-        call tracer_reshape2D_field(idx_order,z_srf,z_srf1)
-        call tracer_reshape2D_field(idx_order,H,H1)
-
         ! Note: GRISLI (nx,ny,nz): sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
         !       SICO (nz,ny,nx): sigma(1) = 0, sigma(nz) = 1
-        ! Using tracer_reshape3D homogenizes them to ascending z-axis (nx,ny,nz)
+        ! reshape routines ensure ascending z-axis (nx,ny,nz) with sigma(nz)=1 [surface]
         
-        nz = size(ux1,3)
-        z_descending = .FALSE. 
-        if (z1(1) .gt. z1(nz)) z_descending = .TRUE. 
+        ! Correct the sigma values if necessary,
+        ! so that sigma==0 [base]; sigma==1 [surface]
+        zc = z 
+        if (trc%par%is_sigma .and. present(sigma_srf)) then 
+            if (sigma_srf .eq. 0.0) then 
+                ! Adjust sigma values 
+                zc = 1.0 - z 
+            end if 
+        end if 
 
-        ! Determine size of y-axis, if it is one, this is a 2D profile domain
-        ny = size(y1,1)
+        ! Also determine whether z-axis is initially ascending or descending 
+        rev_z = (zc(1) .gt. zc(size(zc)))
 
-        ! Get nx for completeness 
+        call tracer_reshape1D_vec(x, x1,rev=.FALSE.)
+        call tracer_reshape1D_vec(y, y1,rev=.FALSE.)
+        call tracer_reshape1D_vec(zc,z1,rev=rev_z)
+        call tracer_reshape2D_field(idx_order,z_srf,z_srf1)
+        call tracer_reshape2D_field(idx_order,H,H1)
+        call tracer_reshape3D_field(idx_order,ux,ux1,rev_z=rev_z)
+        call tracer_reshape3D_field(idx_order,uy,uy1,rev_z=rev_z)
+        call tracer_reshape3D_field(idx_order,uz,uz1,rev_z=rev_z)
+        
+        ! Get axis sizes (if ny==2, this is a 2D profile domain) 
         nx = size(x1,1)
-
-        kbase = 1
-        ksrf = nz 
-        if (z_descending) then 
-            kbase = nz 
-            ksrf  = 1 
-        end if
+        ny = size(y1,1)
+        nz = size(z1,1)
 
         if (trim(trc%par%interp_method) .eq. "spline") then
 
@@ -331,9 +336,9 @@ contains
                 trc%now%z(i)     = trc%now%z_srf(i)-trc%now%dpth(i)
                 
                 trc%now%H(i)     = interp_bilinear(par_lin,H1)
-                trc%now%ux(i)    = interp_bilinear(par_lin,ux1(:,:,ksrf))
-                trc%now%uy(i)    = interp_bilinear(par_lin,uy1(:,:,ksrf))
-                trc%now%uz(i)    = interp_bilinear(par_lin,uz1(:,:,ksrf)) 
+                trc%now%ux(i)    = interp_bilinear(par_lin,ux1(:,:,nz))
+                trc%now%uy(i)    = interp_bilinear(par_lin,uy1(:,:,nz))
+                trc%now%uz(i)    = interp_bilinear(par_lin,uz1(:,:,nz)) 
 
                 ! Initialize state variables
                 trc%now%T(i)   = 260.0 
@@ -940,104 +945,29 @@ contains
 
     end subroutine tracer_deallocate_stats
 
-    subroutine tracer_reshape3D(idx_order,x,y,z,ux,uy,uz,x1,y1,z1,ux1,uy1,uz1)
+    subroutine tracer_reshape1D_vec(var,var1,rev)
 
         implicit none 
+     
+        real(prec), intent(IN) :: var(:)
+        real(prec), intent(INOUT), allocatable :: var1(:)
+        logical,    intent(IN) :: rev 
 
-        character(len=3), intent(IN) :: idx_order 
-        real(prec), intent(IN) :: x(:), y(:), z(:)
-        real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
+        integer :: nx
 
-        real(prec), intent(INOUT), allocatable :: x1(:), y1(:), z1(:)
-        real(prec), intent(INOUT), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
-        integer :: i, j, k
-        integer :: nx, ny, nz 
+        nx = size(var,1)
+        if (allocated(var1)) deallocate(var1)
+        allocate(var1(nx))
 
-        nx = size(x)
-        ny = size(y)
-        nz = size(z) 
-
-        if (allocated(x1))  deallocate(x1)
-        if (allocated(y1))  deallocate(y1)
-        if (allocated(z1))  deallocate(z1)
-        if (allocated(ux1)) deallocate(ux1)
-        if (allocated(uy1)) deallocate(uy1)
-        if (allocated(uz1)) deallocate(uz1)
-
-        allocate(x1(nx))
-        allocate(y1(ny))
-        allocate(z1(nz))
-        allocate(ux1(nx,ny,nz))
-        allocate(uy1(nx,ny,nz))
-        allocate(uz1(nx,ny,nz))
-        
-        x1 = x 
-        y1 = y 
-
-        select case(trim(idx_order))
-
-            case("ijk")
-                ! x, y, z array order 
-
-!                 if (z(1) .lt. z(nz)) then 
-!                     ! Already ascending z-axis
-
-                    z1  = z  
-                    ux1 = ux 
-                    uy1 = uy 
-                    uz1 = uz 
-
-!                 else   
-!                     ! Reversed z-axis 
-!                     do k = 1, nz 
-!                         z1(k)      = z(nz-k+1)
-!                         ux1(:,:,k) = ux(:,:,nz-k+1)
-!                         uy1(:,:,k) = uy(:,:,nz-k+1)
-!                         uz1(:,:,k) = uz(:,:,nz-k+1)
-!                     end do 
-!                 end if 
-
-            case("kji")
-                ! z, y, x array order 
-
-!                 if (z(1) .lt. z(nz)) then 
-!                     ! Already ascending z-axis
-
-                    z1  = z  
-                    do i = 1, nx 
-                    do j = 1, ny 
-                        ux1(i,j,:) = ux(:,j,i)
-                        uy1(i,j,:) = uy(:,j,i)
-                        uz1(i,j,:) = uz(:,j,i)
-                    end do 
-                    end do 
-
-!                 else   
-!                     ! Reversed z-axis 
-!                     z1  = z(nz:1)
-!                     do i = 1, nx 
-!                     do j = 1, ny
-!                         do k = 1, nz 
-!                             ux1(i,j,k) = ux(nz-k+1,j,i)
-!                             uy1(i,j,k) = uy(nz-k+1,j,i)
-!                             uz1(i,j,k) = uz(nz-k+1,j,i)
-!                         end do 
-!                     end do 
-!                     end do 
-
-!                 end if 
-
-            case DEFAULT 
-
-                write(0,*) "tracer_reshape3D:: error: unrecognized array order: ",trim(idx_order)
-                write(0,*) "    Possible choices are: ijk, kji"
-                stop  
-
-        end select 
+        if (rev) then 
+            var1 = var(nx:1)
+        else 
+            var1 = var 
+        end if 
 
         return 
 
-    end subroutine tracer_reshape3D
+    end subroutine tracer_reshape1D_vec
 
     subroutine tracer_reshape2D_field(idx_order,var,var1)
 
@@ -1089,14 +1019,15 @@ contains
 
     end subroutine tracer_reshape2D_field
 
-    subroutine tracer_reshape3D_field(idx_order,var,var1)
+    subroutine tracer_reshape3D_field(idx_order,var,var1,rev_z)
 
         implicit none 
 
         character(len=3), intent(IN) :: idx_order 
         real(prec), intent(IN) :: var(:,:,:)
         real(prec), intent(INOUT), allocatable :: var1(:,:,:)
-        integer :: i, j, k
+        logical,    intent(IN) :: rev_z   ! Reverse the z-axis? 
+        integer :: i, j
         integer :: nx, ny, nz 
 
         select case(trim(idx_order))
@@ -1111,7 +1042,15 @@ contains
                 if (allocated(var1)) deallocate(var1)
                 allocate(var1(nx,ny,nz))
 
-                var1 = var 
+                if (rev_z) then 
+                    do i = 1, nx 
+                    do j = 1, ny  
+                        var1(i,j,:)  = var(i,j,nz:1) 
+                    end do 
+                    end do 
+                else 
+                    var1 = var 
+                end if 
 
             case("kji")
                 ! z, y, x array order 
@@ -1123,17 +1062,23 @@ contains
                 if (allocated(var1)) deallocate(var1)
                 allocate(var1(nx,ny,nz))
 
-                do i = 1, nx 
-                do j = 1, ny 
-                do k = 1, nz 
-                    var1(i,j,k)  = var(k,j,i)
-                end do 
-                end do 
-                end do 
+                if (rev_z) then 
+                    do i = 1, nx 
+                    do j = 1, ny 
+                        var1(i,j,:)  = var(nz:1,j,i)
+                    end do 
+                    end do 
+                else 
+                    do i = 1, nx 
+                    do j = 1, ny 
+                        var1(i,j,:)  = var(1:nz,j,i) 
+                    end do 
+                    end do 
+                end if 
 
             case DEFAULT 
 
-                write(0,*) "tracer_reshape2D_field:: error: unrecognized array order: ",trim(idx_order)
+                write(0,*) "tracer_reshape3D_field:: error: unrecognized array order: ",trim(idx_order)
                 write(0,*) "    Possible choices are: ijk, kji"
                 stop  
 

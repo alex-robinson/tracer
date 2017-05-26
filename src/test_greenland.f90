@@ -59,7 +59,7 @@ program tracertest
     dt       = 1.0 
 
     ! Initialize tracer and output file 
-    call tracer_init(trc1,"Greenland.nml",time=time,x=xc,y=yc,z=sigma,is_sigma=.TRUE.)
+    call tracer_init(trc1,"Greenland.nml",time=time,x=xc,y=yc,is_sigma=.TRUE.)
     call tracer_write_init(trc1,fldr,filename)
 
     q = 9 
@@ -69,8 +69,9 @@ program tracertest
         if (k .gt. 1) time = time + dt 
         write(*,*) "time = ", time, trc1%par%n_active
 
-        call tracer_update(trc1%par,trc1%now,trc1%dep,trc1%stats,time=time, &
-                            x=xc,y=yc,z=sigma,z_srf=zs,H=H,ux=ux,uy=uy,uz=uz,dep_now=.TRUE.)
+        call tracer_update(trc1,time=time, &
+                            x=xc,y=yc,z=sigma,z_srf=zs,H=H,ux=ux,uy=uy,uz=uz,dep_now=.TRUE., &
+                            stats_now=(time.eq.time_end))
 
         q = q+1 
         if (q==10) then 

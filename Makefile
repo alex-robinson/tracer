@@ -121,6 +121,9 @@ $(objdir)/tracer.o: $(srcdir)/tracer.f90 $(objdir)/tracer_precision.o $(objdir)/
 $(objdir)/tracer2D.o: $(srcdir)/tracer2D.f90 $(objdir)/tracer.o $(objdir)/tracer_precision.o $(objdir)/ncio.o
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
+$(objdir)/tracer_import.o: $(srcdir)/tracer_import.f90 $(objdir)/tracer.o $(objdir)/tracer_precision.o $(objdir)/ncio.o
+	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
+
 ## bspline-fortran #####
 $(objdir)/bspline_sub_module.o: $(libdir)/bspline-fortran/bspline_sub_module.f90
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
@@ -140,7 +143,8 @@ obj_bspline =   $(objdir)/bspline_sub_module.o    \
 obj_tracer =    $(objdir)/tracer_precision.o \
 				$(objdir)/tracer_interp.o \
 				$(objdir)/tracer.o \
-				$(objdir)/tracer2D.o
+				$(objdir)/tracer2D.o \
+				$(objdir)/tracer_import.o
 
 obj_libs   =    $(objdir)/nml.o    \
 				$(objdir)/ncio.o

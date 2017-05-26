@@ -22,13 +22,13 @@ module tracer2D
 contains
 
 
-    subroutine tracer2D_init(trc,filename,time,x,z,is_sigma)
+    subroutine tracer2D_init(trc,filename,time,x,is_sigma)
 
         implicit none 
 
         type(tracer_class),   intent(OUT) :: trc 
         character(len=*),     intent(IN)  :: filename 
-        real(prec), intent(IN) :: x(:), z(:)
+        real(prec), intent(IN) :: x(:)
         logical,    intent(IN) :: is_sigma 
         real(4) :: time 
 
@@ -38,7 +38,7 @@ contains
         y(1:2) = [0.0,1.0] 
 
         ! Call 3D tracer_init
-        call tracer_init(trc,filename,time,x,y,z,is_sigma)
+        call tracer_init(trc,filename,time,x,y,is_sigma)
 
         return 
 
@@ -54,7 +54,8 @@ contains
         real(prec), intent(IN) :: x(:), z(:)
         real(prec), intent(IN) :: z_srf(:), H(:)
         real(prec), intent(IN) :: ux(:,:), uz(:,:)
-        logical,    intent(IN) :: dep_now, stats_now  
+        logical,    intent(IN) :: dep_now, stats_now 
+         
         ! Local variables
         real(prec) :: y(2) 
         real(prec), allocatable :: z_srf_2D(:,:), H_2D(:,:)
