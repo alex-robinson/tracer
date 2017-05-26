@@ -43,14 +43,17 @@ module tracer
         real(prec), allocatable :: x(:), y(:)
         real(prec), allocatable :: depth_norm(:)
         real(prec), allocatable :: age_iso(:) 
+        
         real(prec), allocatable :: depth_iso(:,:,:)
         real(prec), allocatable :: depth_iso_err(:,:,:)
+        real(prec), allocatable :: dep_z_iso(:,:,:)
+        integer,    allocatable :: density_iso(:,:,:)
+        
         real(prec), allocatable :: ice_age(:,:,:)
         real(prec), allocatable :: ice_age_err(:,:,:)
         integer,    allocatable :: density(:,:,:)
-        integer,    allocatable :: density_iso(:,:,:)
         
-
+        
     end type
 
     type tracer_dep_class 
@@ -264,10 +267,8 @@ contains
 
                 ! Calculate zc-axis for the current point
                 ! (z_bedrock + ice thickness)
+                ! Note: equivalent to (z_srf - depth) = trc%now%z_srf(i) - (1.0-z1)*trc%now%H(i)
                 zc = (trc%now%z_srf(i)-trc%now%H(i)) + z1*trc%now%H(i)
-
-!                 ! Ensure that the tracer z-value is not higher than the surface
-!                 if (trc%now%z(i) .gt. trc%now%z_srf(i)) trc%now%z(i) = trc%now%z_srf(i)
 
                 if (trim(trc%par%interp_method) .eq. "linear") then 
                     ! Trilinear interpolation 
@@ -627,7 +628,7 @@ contains
         
         dt = 1.0 ! Isochrone uncertainty of 1 ka  
         dz = (trc%stats%depth_norm(2) - trc%stats%depth_norm(1))/2.0   ! depth_norm is equally spaced
-        
+
         ! Loop over grid and fill in information
         do j = 1, ny 
         do i = 1, nx 
@@ -650,11 +651,15 @@ contains
                     trc%stats%depth_iso(i,j,q)     = calc_mean(trc%now%dpth(inds))
                     trc%stats%depth_iso_err(i,j,q) = calc_sd(trc%now%dpth(inds),trc%stats%depth_iso(i,j,q))
                     trc%stats%density_iso(i,j,q)   = n_ind 
+
+                    trc%stats%dep_z_iso(i,j,q)     = calc_mean(trc%dep%z(inds))
                 else 
                     trc%stats%depth_iso(i,j,q)     = MV 
                     trc%stats%depth_iso_err(i,j,q) = MV
                     trc%stats%density_iso(i,j,q)   = MV
- 
+                    
+                    trc%stats%dep_z_iso(i,j,q)     = MV 
+
                 end if 
 
             end do 
@@ -887,23 +892,25 @@ contains
         allocate(stats%age_iso(5))      ! To match Macgregor et al. (2015)
         allocate(stats%depth_iso(size(x),size(y),size(stats%age_iso)))
         allocate(stats%depth_iso_err(size(x),size(y),size(stats%age_iso)))
+        allocate(stats%dep_z_iso(size(x),size(y),size(stats%age_iso)))
+        allocate(stats%density_iso(size(x),size(y),size(stats%age_iso)))
         allocate(stats%ice_age(size(x),size(y),size(stats%depth_norm)))
         allocate(stats%ice_age_err(size(x),size(y),size(stats%depth_norm)))
         allocate(stats%density(size(x),size(y),size(stats%depth_norm)))
-        allocate(stats%density_iso(size(x),size(y),size(stats%age_iso)))
-
+        
         ! Also store axis information directly
         stats%x = x 
         stats%y = y 
 
         ! Initialize arrays to zeros 
         stats%depth_iso     = 0.0 
-        stats%depth_iso_err = 0.0 
+        stats%depth_iso_err = 0.0
+        stats%dep_z_iso     = MV  
+        stats%density_iso   = MV 
         stats%ice_age       = 0.0 
         stats%ice_age_err   = 0.0 
         stats%density       = MV 
-        stats%density_iso   = MV 
-
+        
         return
 
     end subroutine tracer_allocate_stats
@@ -921,11 +928,12 @@ contains
         if (allocated(stats%age_iso))       deallocate(stats%age_iso)
         if (allocated(stats%depth_iso))     deallocate(stats%depth_iso)
         if (allocated(stats%depth_iso_err)) deallocate(stats%depth_iso_err)
+        if (allocated(stats%dep_z_iso))     deallocate(stats%dep_z_iso)
+        if (allocated(stats%density_iso))   deallocate(stats%density_iso)
         if (allocated(stats%ice_age))       deallocate(stats%ice_age)
         if (allocated(stats%ice_age_err))   deallocate(stats%ice_age_err)
         if (allocated(stats%density))       deallocate(stats%density)
-        if (allocated(stats%density_iso))   deallocate(stats%density_iso)
-
+        
         return
 
     end subroutine tracer_deallocate_stats
@@ -1219,9 +1227,11 @@ contains
                       units="1",long_name="Tracer density")
 
         call nc_write(path_out,"depth_iso",trc%stats%depth_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
-                      units="ka",long_name="Isochrone depth")
+                      units="m",long_name="Isochrone depth")
         call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
-                      units="ka",long_name="Isochrone depth - error")
+                      units="m",long_name="Isochrone depth - error")
+        call nc_write(path_out,"dep_z_iso",trc%stats%dep_z_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
+                      units="m",long_name="Isochrone deposition elevation")
         call nc_write(path_out,"density_iso",trc%stats%density_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=int(MV), &
                       units="1",long_name="Tracer density (for isochrones)")
 
