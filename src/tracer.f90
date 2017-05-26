@@ -43,7 +43,7 @@ module tracer
         real(prec), allocatable :: x(:), y(:)
         real(prec), allocatable :: depth_norm(:)
         real(prec), allocatable :: age_iso(:) 
-        
+
         real(prec), allocatable :: depth_iso(:,:,:)
         real(prec), allocatable :: depth_iso_err(:,:,:)
         real(prec), allocatable :: dep_z_iso(:,:,:)
@@ -205,8 +205,8 @@ contains
 
         ! Also determine whether z-axis is ascending or descending 
         call tracer_reshape3D(idx_order,x,y,z,ux,uy,uz,x1,y1,z1,ux1,uy1,uz1)
-        call tracer_reshape2D_field(idx_order,x1,y1,z_srf,z_srf1)
-        call tracer_reshape2D_field(idx_order,x1,y1,H,H1)
+        call tracer_reshape2D_field(idx_order,z_srf,z_srf1)
+        call tracer_reshape2D_field(idx_order,H,H1)
 
         ! Note: GRISLI (nx,ny,nz): sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
         !       SICO (nz,ny,nx): sigma(1) = 0, sigma(nz) = 1
@@ -598,6 +598,8 @@ contains
     subroutine calc_tracer_stats(trc,x,y,z,z_srf,H)
         ! Convert tracer information to isochrone format matching
         ! Macgregor et al. (2015)
+        ! Note: this should only be called at time t=0 ka BP, 
+        ! since age is defined assuming that. 
 
         implicit none
         
@@ -683,8 +685,8 @@ contains
                 if (n_ind .gt. 0) then
                     write(*,*) "ice_ages: ", i, j, q, n_ind 
  
-                    trc%stats%ice_age(i,j,q)     = calc_mean(trc%dep%time(inds))*1e-3
-                    trc%stats%ice_age_err(i,j,q) = calc_sd(trc%dep%time(inds),trc%stats%ice_age(i,j,q))*1e-3
+                    trc%stats%ice_age(i,j,q)     = calc_mean(0.0-trc%dep%time(inds))*1e-3
+                    trc%stats%ice_age_err(i,j,q) = calc_sd(0.0-trc%dep%time(inds),trc%stats%ice_age(i,j,q))*1e-3
                     trc%stats%density(i,j,q)     = n_ind 
                 else 
                     trc%stats%ice_age(i,j,q)     = MV 
@@ -1037,32 +1039,37 @@ contains
 
     end subroutine tracer_reshape3D
 
-    subroutine tracer_reshape2D_field(idx_order,x1,y1,var,var1)
+    subroutine tracer_reshape2D_field(idx_order,var,var1)
 
         implicit none 
 
         character(len=3), intent(IN) :: idx_order 
         real(prec), intent(IN) :: var(:,:)
-        real(prec), intent(IN) :: x1(:), y1(:)
         real(prec), intent(INOUT), allocatable :: var1(:,:)
         integer :: i, j
         integer :: nx, ny
-
-        nx = size(x1)
-        ny = size(y1)
-
-        if (allocated(var1)) deallocate(var1)
-        allocate(var1(nx,ny))
 
         select case(trim(idx_order))
 
             case("ijk")
                 ! x, y, z array order 
 
+                nx = size(var,1)
+                ny = size(var,2)
+
+                if (allocated(var1)) deallocate(var1)
+                allocate(var1(nx,ny))
+
                 var1 = var 
 
             case("kji")
                 ! z, y, x array order 
+
+                nx = size(var,2)
+                ny = size(var,1)
+
+                if (allocated(var1)) deallocate(var1)
+                allocate(var1(nx,ny))
 
                 do i = 1, nx 
                 do j = 1, ny 
@@ -1081,6 +1088,60 @@ contains
         return 
 
     end subroutine tracer_reshape2D_field
+
+    subroutine tracer_reshape3D_field(idx_order,var,var1)
+
+        implicit none 
+
+        character(len=3), intent(IN) :: idx_order 
+        real(prec), intent(IN) :: var(:,:,:)
+        real(prec), intent(INOUT), allocatable :: var1(:,:,:)
+        integer :: i, j, k
+        integer :: nx, ny, nz 
+
+        select case(trim(idx_order))
+
+            case("ijk")
+                ! x, y, z array order 
+
+                nx = size(var,1)
+                ny = size(var,2)
+                nz = size(var,3)
+
+                if (allocated(var1)) deallocate(var1)
+                allocate(var1(nx,ny,nz))
+
+                var1 = var 
+
+            case("kji")
+                ! z, y, x array order 
+
+                nx = size(var,3)
+                ny = size(var,2)
+                nz = size(var,1)
+
+                if (allocated(var1)) deallocate(var1)
+                allocate(var1(nx,ny,nz))
+
+                do i = 1, nx 
+                do j = 1, ny 
+                do k = 1, nz 
+                    var1(i,j,k)  = var(k,j,i)
+                end do 
+                end do 
+                end do 
+
+            case DEFAULT 
+
+                write(0,*) "tracer_reshape2D_field:: error: unrecognized array order: ",trim(idx_order)
+                write(0,*) "    Possible choices are: ijk, kji"
+                stop  
+
+        end select 
+
+        return 
+
+    end subroutine tracer_reshape3D_field
 
     ! ================================================
     !
