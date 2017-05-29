@@ -240,7 +240,7 @@ contains
 
         ! Also determine whether z-axis is initially ascending or descending 
         rev_z = (zc(1) .gt. zc(size(zc)))
-        
+
         call tracer_reshape1D_vec(x, x1,rev=.FALSE.)
         call tracer_reshape1D_vec(y, y1,rev=.FALSE.)
         call tracer_reshape1D_vec(zc,z1,rev=rev_z)
@@ -1176,29 +1176,29 @@ contains
         tmp = trc%now%x
         where(trc%now%x .ne. MV) tmp = trc%now%x*1e-3
         call nc_write(path_out,"x",tmp,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="km")
         tmp = trc%now%y
         where(trc%now%y .ne. MV) tmp = trc%now%y*1e-3
         call nc_write(path_out,"y",tmp,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="km")
         call nc_write(path_out,"z",trc%now%z,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"dpth",trc%now%dpth,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"z_srf",trc%now%z_srf,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"ux",trc%now%ux,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m/a")
         call nc_write(path_out,"uy",trc%now%uy,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m/a")
         call nc_write(path_out,"uz",trc%now%uz,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m/a")
         call nc_write(path_out,"thk",trc%now%thk,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"T",trc%now%T,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"H",trc%now%H,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m")
 
         call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(MV), &
                         start=[1,nt],count=[trc%par%n ,1])
@@ -1207,17 +1207,17 @@ contains
         call nc_write(path_out,"dep_time",trc%dep%time,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])
         call nc_write(path_out,"dep_H",trc%dep%H,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m")
         tmp = trc%dep%x
         where(trc%dep%x .ne. MV) tmp = trc%dep%x*1e-3
         call nc_write(path_out,"dep_x",tmp,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="km")
         tmp = trc%dep%y
         where(trc%dep%y .ne. MV) tmp = trc%dep%y*1e-3
         call nc_write(path_out,"dep_y",tmp,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="km")
         call nc_write(path_out,"dep_z",trc%dep%z,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="m")
 
         return 
 

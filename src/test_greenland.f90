@@ -49,6 +49,9 @@ program tracertest
     call nc_read(file0,"Uy",uy)
     call nc_read(file0,"Uz",uz)
 
+    ! Switch uz direction so that + is up 
+    uz = -uz 
+    
     fldr     = "output"
     filename       = "GRL-20KM_trc1.nc"
     filename_stats = "GRL-20KM_trc1-stats.nc"

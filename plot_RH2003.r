@@ -5,7 +5,7 @@ library(myr)
 
 
 # Load data 
-if (FALSE) {
+if (TRUE) {
 
     rh     = my.read.nc("output/profile_RH2003.nc")
     rh$x   = rh$x*1e-3 
@@ -22,7 +22,7 @@ colax = "grey40"
 
 # Plot comparison at dome
 if (TRUE) {
-    
+
     dx = 100 
     it = which(trc$time>-160)
 
