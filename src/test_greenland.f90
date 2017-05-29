@@ -58,6 +58,9 @@ program tracertest
     time_end = 102.0
     dt       = 1.0 
 
+!     sigma = 1.0 - sigma 
+!     write(*,*) "sigma = ", sigma 
+    
     ! Initialize tracer and output file 
     call tracer_init(trc1,"Greenland.nml",time=time,x=xc,y=yc,is_sigma=.TRUE.)
     call tracer_write_init(trc1,fldr,filename)

@@ -86,11 +86,15 @@ module tracer
 
     private 
 
-    ! For tracer2D module
+    ! For other tracer modules
     public :: tracer_par_class
     public :: tracer_state_class
     public :: tracer_dep_class
     public :: tracer_stats_class
+
+    public :: tracer_reshape1D_vec
+    public :: tracer_reshape2D_field 
+    public :: tracer_reshape3D_field
 
     ! General public 
     public :: tracer_class 
@@ -184,10 +188,10 @@ contains
 
         ! Local variables  
         character(len=3) :: idx_order 
-        real(prec) :: zc(size(z))   ! Actual cartesian z-axis after applying sigma*H 
         integer    :: i, j, k, nx, ny, nz
         logical    :: rev_z 
         real(prec), allocatable :: x1(:), y1(:), z1(:)
+        real(prec), allocatable :: zc(:)   ! Actual cartesian z-axis after applying sigma*H 
         real(prec), allocatable :: z_srf1(:,:), H1(:,:)
         real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
         real(prec), allocatable :: usig1(:,:,:)
@@ -203,23 +207,40 @@ contains
         idx_order = "ijk"
         if (present(order)) idx_order = trim(order)
 
+        ! Allocate helper z-axis variable 
+        if (allocated(zc)) deallocate(zc)
+        allocate(zc(size(z)))
+
+        zc = z 
+
+        if (trc%par%is_sigma) then 
+            ! Ensure z-axis is properly bounded
+            where (abs(zc) .lt. 1e-5) zc = 0.0 
+
+            if (minval(zc) .lt. 0.0 .or. maxval(zc) .gt. 1.0) then 
+                write(0,*) "tracer:: error: sigma axis not bounded between zero and one."
+                write(0,*) "z = ", zc 
+                stop 
+            end if
+
+        end if 
+
         ! Note: GRISLI (nx,ny,nz): sigma goes from 1 to 0, so sigma(1)=1 [surface], sigma(nz)=0 [base]
         !       SICO (nz,ny,nx): sigma(1) = 0, sigma(nz) = 1
         ! reshape routines ensure ascending z-axis (nx,ny,nz) with sigma(nz)=1 [surface]
         
         ! Correct the sigma values if necessary,
         ! so that sigma==0 [base]; sigma==1 [surface]
-        zc = z 
         if (trc%par%is_sigma .and. present(sigma_srf)) then 
             if (sigma_srf .eq. 0.0) then 
                 ! Adjust sigma values 
-                zc = 1.0 - z 
+                zc = 1.0 - zc 
             end if 
         end if 
 
         ! Also determine whether z-axis is initially ascending or descending 
         rev_z = (zc(1) .gt. zc(size(zc)))
-
+        
         call tracer_reshape1D_vec(x, x1,rev=.FALSE.)
         call tracer_reshape1D_vec(y, y1,rev=.FALSE.)
         call tracer_reshape1D_vec(zc,z1,rev=rev_z)
@@ -953,14 +974,16 @@ contains
         real(prec), intent(INOUT), allocatable :: var1(:)
         logical,    intent(IN) :: rev 
 
-        integer :: nx
+        integer :: i, nx
 
         nx = size(var,1)
         if (allocated(var1)) deallocate(var1)
         allocate(var1(nx))
 
         if (rev) then 
-            var1 = var(nx:1)
+            do i = 1, nx
+                var1(i) = var(nx-i+1)
+            end do 
         else 
             var1 = var 
         end if 
@@ -1027,7 +1050,7 @@ contains
         real(prec), intent(IN) :: var(:,:,:)
         real(prec), intent(INOUT), allocatable :: var1(:,:,:)
         logical,    intent(IN) :: rev_z   ! Reverse the z-axis? 
-        integer :: i, j
+        integer :: i, j, k
         integer :: nx, ny, nz 
 
         select case(trim(idx_order))
@@ -1045,7 +1068,9 @@ contains
                 if (rev_z) then 
                     do i = 1, nx 
                     do j = 1, ny  
-                        var1(i,j,:)  = var(i,j,nz:1) 
+                    do k = 1, nz 
+                        var1(i,j,k)  = var(i,j,nz-k+1) 
+                    end do 
                     end do 
                     end do 
                 else 
@@ -1065,13 +1090,15 @@ contains
                 if (rev_z) then 
                     do i = 1, nx 
                     do j = 1, ny 
-                        var1(i,j,:)  = var(nz:1,j,i)
+                    do k = 1, nz 
+                        var1(i,j,k)  = var(nz-k+1,j,i)
+                    end do 
                     end do 
                     end do 
                 else 
                     do i = 1, nx 
                     do j = 1, ny 
-                        var1(i,j,:)  = var(1:nz,j,i) 
+                        var1(i,j,k)  = var(k,j,i) 
                     end do 
                     end do 
                 end if 
