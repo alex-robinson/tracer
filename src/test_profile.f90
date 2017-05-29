@@ -42,7 +42,7 @@ program tracertest
     filename_stats = "profile_RH2003_trc1-stats.nc"
 
     ! Test tracer_update
-    time     = -500000.0 
+    time     = -160000.0 
     time_end = 0.0
     dt       = 5.0 
 
@@ -62,9 +62,6 @@ program tracertest
         dep_now  = .FALSE.
         if (mod(time,dt_dep) .eq. 0.0) dep_now = .TRUE. 
 
-        write(*,*) "time = ", time, trc1%par%n_active
-
-
         call tracer2D_update(trc1,time=time, &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
                              ux=prof1%ux*0.0,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
@@ -73,12 +70,13 @@ program tracertest
         if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
             call tracer2D_write(trc1,time,fldr,filename)
             dt_write_now = 0.0 
+            write(*,*) "time = ", time, trc1%par%n_active
         end if 
 
     end do 
 
-    ! Write stats 
-    call tracer2D_write_stats(trc1,time,fldr,filename_stats)
+!     ! Write stats 
+!     call tracer2D_write_stats(trc1,time,fldr,filename_stats)
 
 contains 
 

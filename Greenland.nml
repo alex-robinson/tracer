@@ -11,7 +11,8 @@
     H_min_dep = 1000.0          ! m 
     alpha     = 1.0 
     dist      = "linear"
-
+    noise     = True 
+    
     dens_z_lim = 50.0           ! m
     dens_max   = 10             ! Number of points
 

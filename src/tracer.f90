@@ -22,6 +22,7 @@ module tracer
         real(prec) :: H_min_dep                 ! Minimum ice thickness for tracer deposition (m)
         real(prec) :: alpha                     ! Slope of probability function
         character(len=56) :: dist               ! Distribution for generating prob. function
+        logical    :: noise                     ! Add noise to gridded deposition location
         real(prec) :: dens_z_lim                ! Distance from surface to count density
         integer    :: dens_max                  ! Max allowed density of particles at surface
         
@@ -352,7 +353,7 @@ contains
                 par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
 
                 ! Apply interpolation weights to variables
-                trc%now%dpth(i)  = 1.0   ! Always deposit below the surface (eg 1 m) to avoid zero z-velocity
+                trc%now%dpth(i)  = 0.1   ! Always deposit below the surface (eg 1 m) to avoid zero z-velocity
                 trc%now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
                 trc%now%z(i)     = trc%now%z_srf(i)-trc%now%dpth(i)
                 
@@ -445,14 +446,19 @@ contains
 
         ! Generate random numbers to populate points 
         allocate(jit(2,ntot))
-        call random_number(jit)
-        jit = (jit - 0.5)
-        jit(1,:) = jit(1,:)*(x(2)-x(1)) 
 
-        if (size(y,1) .gt. 2) then 
-            jit(2,:) = jit(2,:)*(y(2)-y(1)) 
-        else   ! Profile
-            jit(2,:) = 0.0 
+        if (par%noise) then 
+            call random_number(jit)
+            jit = (jit - 0.5)
+            jit(1,:) = jit(1,:)*(x(2)-x(1)) 
+
+            if (size(y,1) .gt. 2) then 
+                jit(2,:) = jit(2,:)*(y(2)-y(1)) 
+            else   ! Profile
+                jit(2,:) = 0.0 
+            end if 
+        else 
+            jit = 0.0 
         end if 
 
 !         write(*,*) "range jit: ", minval(jit), maxval(jit)
@@ -505,7 +511,7 @@ contains
         end if
 
         ! Summary 
-        write(*,*) "tracer_activate:: ", count(now%active == 0), count(now%active .eq. 1), count(now%active .eq. 2)
+!         write(*,*) "tracer_activate:: ", count(now%active == 0), count(now%active .eq. 1), count(now%active .eq. 2)
 
         return 
 
@@ -808,6 +814,7 @@ contains
         call nml_read(filename,"tracer_par","H_min_dep",    par%H_min_dep)
         call nml_read(filename,"tracer_par","alpha",        par%alpha)
         call nml_read(filename,"tracer_par","dist",         par%dist)
+        call nml_read(filename,"tracer_par","noise",        par%noise)
         call nml_read(filename,"tracer_par","dens_z_lim",   par%dens_z_lim)
         call nml_read(filename,"tracer_par","dens_max",     par%dens_max)
         call nml_read(filename,"tracer_par","interp_method",par%interp_method)
@@ -1170,7 +1177,6 @@ contains
         if (time_in .ne. MV .and. abs(time-time_in).gt.1e-2) nt = nt+1 
 
         call nc_write(path_out,"time",time,dim1="time",start=[nt],count=[1],missing_value=MV)
-        
         call nc_write(path_out,"n_active",trc%par%n_active,dim1="time",start=[nt],count=[1],missing_value=int(MV))
         
         tmp = trc%now%x

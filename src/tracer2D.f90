@@ -82,7 +82,8 @@ contains
         end do 
 
         ! Now update tracers using 3D call 
-        call tracer_update(trc,time,x,y,z,z_srf_2D,H_2D,ux_3D,uy_3D,uz_3D,dep_now,stats_now)
+        call tracer_update(trc,time,x,y,z,z_srf_2D,H_2D,ux_3D,uy_3D,uz_3D, &
+                            dep_now,stats_now,order="ijk")
 
         return 
 

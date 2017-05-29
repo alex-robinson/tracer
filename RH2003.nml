@@ -1,7 +1,7 @@
 
 &tracer_par
-    n         = 10000
-    n_max_dep = 500
+    n         = 1000
+    n_max_dep = 1
     
     thk_min   = 1e-2            ! m (minimum thickness of tracer 'layer')
     H_min     = 3400.0          ! m 
@@ -11,6 +11,7 @@
     H_min_dep = 3595.0          ! m 
     alpha     = 1.0 
     dist      = "linear"
+    noise     = False 
     
     dens_z_lim = 50.0           ! m
     dens_max   = 10             ! Number of points
