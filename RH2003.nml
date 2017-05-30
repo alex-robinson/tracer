@@ -12,10 +12,17 @@
     alpha     = 1.0 
     dist      = "linear"
     noise     = False 
-    
+
     dens_z_lim = 50.0           ! m
     dens_max   = 10             ! Number of points
     
     ! Method 
     interp_method = "linear"    ! "linear" or "spline"
+/
+
+&rh_par
+    nx  = 51 
+    nz  = 101 
+    M   = 0.1         ! m/a
+    L   = 1e6         ! m 
 /

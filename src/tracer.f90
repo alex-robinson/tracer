@@ -353,7 +353,7 @@ contains
                 par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
 
                 ! Apply interpolation weights to variables
-                trc%now%dpth(i)  = 0.1   ! Always deposit below the surface (eg 1 m) to avoid zero z-velocity
+                trc%now%dpth(i)  = 0.01   ! Always deposit just below the surface (eg 1 cm) to avoid zero z-velocity
                 trc%now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
                 trc%now%z(i)     = trc%now%z_srf(i)-trc%now%dpth(i)
                 

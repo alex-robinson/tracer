@@ -2,6 +2,7 @@
 program tracertest 
 
     use ncio
+    use nml 
     use tracer 
     use tracer2D 
     use tracer_precision 
@@ -24,17 +25,11 @@ program tracertest
     
     integer :: k, kmax, q 
     real(4) :: time, time_end, dt  
-    integer :: i0, i1 
     real(4) :: dt_write, dt_write_now  
     logical             :: dep_now 
     real(prec)          :: dt_dep 
 
-    
-    ! Limit x-direction of domain to close to ice divide (x=0) to minimize 
-    ! computations for checking comparison
-    i1 = 51 
-
-    call calc_profile_RH2003(prof1)
+    call calc_profile_RH2003(prof1,"RH2003.nml")
     call profile_write(prof1,fldr="output",filename="profile_RH2003.nc")
 
     fldr     = "output"
@@ -44,14 +39,14 @@ program tracertest
     ! Test tracer_update
     time     = -160000.0 
     time_end = 0.0
-    dt       = 5.0 
+    dt       = 10.0 
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,filename)
 
     dt_write = 10000.0 
-    dt_dep   = 200.0 
+    dt_dep   = 250.0 
 
     dt_write_now = 0.0 
 
@@ -64,7 +59,7 @@ program tracertest
 
         call tracer2D_update(trc1,time=time, &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
-                             ux=prof1%ux*0.0,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
+                             ux=prof1%ux,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
 
         if (k .gt. 1) dt_write_now = dt_write_now+dt 
         if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
@@ -80,38 +75,46 @@ program tracertest
 
 contains 
 
-    subroutine calc_profile_RH2003(prof,i1)
+    subroutine calc_profile_RH2003(prof,filename)
         ! Define a 2D profile (x-z) following 
         ! Rybak and Huybrechts (2003, Annals of Glaciology)
 
         implicit none 
 
         type(profile_class), intent(INOUT) :: prof 
-        integer, intent(IN), optional :: i1 
+        character(len=*), intent(IN) :: filename
 
         ! Local parameters 
-        integer, parameter :: nx = 51 
-        integer, parameter :: nz = 101 
+!         integer, parameter :: nx = 51 
+!         integer, parameter :: nz = 101 
         integer, parameter :: ng = 3          ! exponent
         real(4), parameter :: rho = 910.0     ! kg/m^3
         real(4), parameter :: g = 9.81        ! m/s
         real(4), parameter :: A = 10.0**(-16) ! Pa^3/a
-        real(4), parameter :: M = 0.1         ! m/a
-        real(4), parameter :: L = 10.0**6     ! m 
+!         real(4), parameter :: M = 0.1         ! m/a
+!         real(4), parameter :: L = 10.0**6     ! m 
+
+        ! Loaded parameters
+        integer :: nx, nz 
+        real(4) :: M, L 
 
         ! Local variables 
         integer :: i, j 
         real(4) :: H0, dHdx, H 
         real(4) :: GG, B 
 
+        ! Load parameters 
+        call nml_read(filename,"rh_par","nx",nx)
+        call nml_read(filename,"rh_par","nz",nz)
+        call nml_read(filename,"rh_par","M", M)
+        call nml_read(filename,"rh_par","L", L)
+        
+
         GG = M 
         B  = 0 
 
         prof%nz = nz
         prof%nx = nx    ! Right-hand side symmetrical of domain
-!         prof%nx = nx+50 ! Whole domain 
-
-!         if (present(i1)) prof%nx = i1
 
         allocate(prof%xc(prof%nx))
         allocate(prof%sigma(prof%nz))
@@ -125,17 +128,22 @@ contains
 
         allocate(prof%age(prof%nz)) 
 
-        if (prof%nx .lt. 100) then
-            ! Define x-dimension (0-1000 km) 
-            do i = 1, prof%nx 
-                prof%xc(i) = 0.0 + (i-1)/real(nx-1) * 1000.0 
-            end do
-        else
-            ! Define x-dimension (1000-1000 km)
-            do i = 1, prof%nx 
-                prof%xc(i) = -1000.0 + (i-1)/real(nx-1) * 1000.0 
-            end do 
-        end if 
+        ! Define x-dimension (0-1000 km) 
+        do i = 1, prof%nx 
+            prof%xc(i) = 0.0 + (i-1)/real(nx-1) * 1000.0 
+        end do
+
+!         if (prof%nx .lt. 100) then
+!             ! Define x-dimension (0-1000 km) 
+!             do i = 1, prof%nx 
+!                 prof%xc(i) = 0.0 + (i-1)/real(nx-1) * 1000.0 
+!             end do
+!         else
+!             ! Define x-dimension (1000-1000 km)
+!             do i = 1, prof%nx 
+!                 prof%xc(i) = -1000.0 + (i-1)/real(nx-1) * 1000.0 
+!             end do 
+!         end if 
 
         prof%xc = prof%xc*1e3   ! [km] => [m] 
 
