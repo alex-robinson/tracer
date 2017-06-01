@@ -17,5 +17,5 @@
     dens_max   = 10             ! Number of points
 
     ! Method 
-    interp_method = "linear"    ! "linear" or "spline"
+    interp_method = "spline"    ! "linear" or "spline"
 /

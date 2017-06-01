@@ -34,6 +34,7 @@ module tracer
         real(prec), allocatable :: x(:), y(:), z(:), sigma(:)
         real(prec), allocatable :: dpth(:), z_srf(:)
         real(prec), allocatable :: ux(:), uy(:), uz(:)
+        real(prec), allocatable :: ax(:), ay(:), az(:)
         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
         real(prec), allocatable :: T(:)              ! Current temperature of the tracer (for borehole comparison, internal melting...)
         real(prec), allocatable :: H(:)
@@ -115,7 +116,7 @@ contains
         character(len=*),     intent(IN)  :: filename 
         real(prec), intent(IN) :: x(:), y(:)
         logical,    intent(IN) :: is_sigma  
-        real(4) :: time 
+        real(prec) :: time 
 
         ! Local variables 
         integer :: i 
@@ -150,6 +151,9 @@ contains
         trc%now%ux        = mv 
         trc%now%uy        = mv 
         trc%now%uz        = mv 
+        trc%now%ax        = mv 
+        trc%now%ay        = mv 
+        trc%now%az        = mv 
         trc%now%thk       = mv 
         trc%now%T         = mv 
         trc%now%H         = mv 
@@ -196,6 +200,7 @@ contains
         real(prec), allocatable :: z_srf1(:,:), H1(:,:)
         real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
         real(prec), allocatable :: usig1(:,:,:)
+        real(prec) :: ux0, uy0, uz0 
 
         ! Update current time 
         trc%par%time_old = trc%par%time_now 
@@ -251,7 +256,7 @@ contains
         call tracer_reshape3D_field(idx_order,uy,uy1,rev_z=rev_z)
         call tracer_reshape3D_field(idx_order,uz,uz1,rev_z=rev_z)
         
-        ! Get axis sizes (if ny==2, this is a 2D profile domain) 
+        ! Get axis sizes (if ny==5, this is a 2D profile domain) 
         nx = size(x1,1)
         ny = size(y1,1)
         nz = size(z1,1)
@@ -271,6 +276,7 @@ contains
             call interp_bspline3D_weights(bspline3d_uy,x1,y1,z1,uy1)
             call interp_bspline3D_weights(bspline3d_uz,x1,y1,z1,usig1)
             
+            write(*,*) "spline weights calculated."
         end if 
 
 
@@ -297,6 +303,11 @@ contains
                 ! Note: equivalent to (z_srf - depth) = trc%now%z_srf(i) - (1.0-z1)*trc%now%H(i)
                 zc = (trc%now%z_srf(i)-trc%now%H(i)) + z1*trc%now%H(i)
 
+                ! Temporarily store velocity of this time step (for accelaration calculation)
+                ux0 = trc%now%ux(i)
+                uy0 = trc%now%uy(i)
+                uz0 = trc%now%uz(i) 
+
                 if (trim(trc%par%interp_method) .eq. "linear") then 
                     ! Trilinear interpolation 
 
@@ -320,6 +331,11 @@ contains
 
                 end if 
 
+                ! Update acceleration term 
+                trc%now%ax(i) = (trc%now%ux(i) - ux0) / trc%par%dt
+                trc%now%ay(i) = (trc%now%uy(i) - uy0) / trc%par%dt
+                trc%now%az(i) = (trc%now%uz(i) - uz0) / trc%par%dt
+
                 trc%now%T(i)   = 260.0 
                 trc%now%thk(i) = 0.3 
 
@@ -333,7 +349,9 @@ contains
         ! == TO DO == 
 
         ! Update the tracer positions 
-        call calc_position(trc%now%x,trc%now%y,trc%now%z,trc%now%ux,trc%now%uy,trc%now%uz,trc%par%dt,trc%now%active)
+        call calc_position(trc%now%x,trc%now%y,trc%now%z,trc%now%ux,trc%now%uy,trc%now%uz, &
+                           trc%now%ax,trc%now%ay,trc%now%az,trc%par%dt,trc%now%active)
+
 !         call calc_position(trc%now%x,trc%now%y,trc%now%dpth,trc%now%ux,trc%now%uy,-trc%now%uz,trc%par%dt,trc%now%active)
         trc%now%dpth = max(trc%now%z_srf - trc%now%z, 0.0) 
 
@@ -353,7 +371,7 @@ contains
                 par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
 
                 ! Apply interpolation weights to variables
-                trc%now%dpth(i)  = 0.01   ! Always deposit just below the surface (eg 1 cm) to avoid zero z-velocity
+                trc%now%dpth(i)  = 0.001   ! Always deposit just below the surface (eg 1 mm) to avoid zero z-velocity
                 trc%now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
                 trc%now%z(i)     = trc%now%z_srf(i)-trc%now%dpth(i)
                 
@@ -361,7 +379,10 @@ contains
                 trc%now%ux(i)    = interp_bilinear(par_lin,ux1(:,:,nz))
                 trc%now%uy(i)    = interp_bilinear(par_lin,uy1(:,:,nz))
                 trc%now%uz(i)    = interp_bilinear(par_lin,uz1(:,:,nz)) 
-
+                trc%now%ax(i)    = 0.0 
+                trc%now%ay(i)    = 0.0 
+                trc%now%az(i)    = 0.0
+                
                 ! Initialize state variables
                 trc%now%T(i)   = 260.0 
                 trc%now%thk(i) = 0.3 
@@ -568,19 +589,20 @@ contains
     !
     ! ================================================
     
-    elemental subroutine calc_position(x,y,z,ux,uy,uz,dt,active)
+    elemental subroutine calc_position(x,y,z,ux,uy,uz,ax,ay,az,dt,active)
 
         implicit none 
 
         real(prec), intent(INOUT) :: x, y, z 
         real(prec), intent(IN)    :: ux, uy, uz 
+        real(prec), intent(IN)    :: ax, ay, az 
         real(prec), intent(IN)    :: dt 
         integer,    intent(IN)    :: active 
 
         if (active .gt. 0) then 
-            x = x + ux*dt 
-            y = y + uy*dt 
-            z = z + uz*dt 
+            x = x + ux*dt + 0.5*ax*dt**2 
+            y = y + uy*dt + 0.5*ay*dt**2 
+            z = z + uz*dt + 0.5*az*dt**2
         end if 
 
         return 
@@ -856,6 +878,7 @@ contains
         allocate(now%x(n),now%y(n),now%z(n),now%sigma(n))
         allocate(now%z_srf(n),now%dpth(n))
         allocate(now%ux(n),now%uy(n),now%uz(n))
+        allocate(now%ax(n),now%ay(n),now%az(n))
         allocate(now%thk(n))
         allocate(now%T(n))
         allocate(now%H(n))
@@ -888,6 +911,9 @@ contains
         if (allocated(now%ux))        deallocate(now%ux)
         if (allocated(now%uy))        deallocate(now%uy)
         if (allocated(now%uz))        deallocate(now%uz)
+        if (allocated(now%ax))        deallocate(now%ax)
+        if (allocated(now%ay))        deallocate(now%ay)
+        if (allocated(now%az))        deallocate(now%az)
         if (allocated(now%thk))       deallocate(now%thk)
         if (allocated(now%T))         deallocate(now%T)
         if (allocated(now%H))         deallocate(now%H)
@@ -1199,6 +1225,13 @@ contains
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
         call nc_write(path_out,"uz",trc%now%uz,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
+        call nc_write(path_out,"ax",trc%now%ax,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
+        call nc_write(path_out,"ay",trc%now%ay,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
+        call nc_write(path_out,"az",trc%now%az,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
+        
         call nc_write(path_out,"thk",trc%now%thk,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"T",trc%now%T,dim1="pt",dim2="time", missing_value=MV, &
@@ -1209,9 +1242,14 @@ contains
         call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(MV), &
                         start=[1,nt],count=[trc%par%n ,1])
 
+        tmp = MV
+        where(trc%dep%time .ne. MV) tmp = time-trc%dep%time
+        call nc_write(path_out,"age",tmp,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1],units="a")
+
         ! Write deposition information
         call nc_write(path_out,"dep_time",trc%dep%time,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1])
+                        start=[1,nt],count=[trc%par%n ,1],units="years")
         call nc_write(path_out,"dep_H",trc%dep%H,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         tmp = trc%dep%x

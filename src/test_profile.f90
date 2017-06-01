@@ -15,17 +15,17 @@ program tracertest
     type profile_class 
         integer :: nx, nz
         integer, allocatable :: dims(:) 
-        real(4), allocatable :: xc(:), sigma(:)
-        real(4), allocatable :: zs(:), zb(:), H(:), dHdx(:), ux(:,:), uz(:,:)
-        real(4), allocatable :: age(:)
+        real(prec), allocatable :: xc(:), sigma(:)
+        real(prec), allocatable :: zs(:), zb(:), H(:), dHdx(:), ux(:,:), uz(:,:)
+        real(prec), allocatable :: age(:)
 
     end type 
 
     type(profile_class) :: prof1 
     
     integer :: k, kmax, q 
-    real(4) :: time, time_end, dt  
-    real(4) :: dt_write, dt_write_now  
+    real(prec) :: time, time_end, dt  
+    real(prec) :: dt_write, dt_write_now  
     logical             :: dep_now 
     real(prec)          :: dt_dep 
 
@@ -39,13 +39,13 @@ program tracertest
     ! Test tracer_update
     time     = -160000.0 
     time_end = 0.0
-    dt       = 10.0 
+    dt       = 1.0 
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,filename)
 
-    dt_write = 10000.0 
+    dt_write = 100.0 
     dt_dep   = 250.0 
 
     dt_write_now = 0.0 
@@ -59,7 +59,7 @@ program tracertest
 
         call tracer2D_update(trc1,time=time, &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
-                             ux=prof1%ux,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
+                             ux=prof1%ux*0.0,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
 
         if (k .gt. 1) dt_write_now = dt_write_now+dt 
         if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
@@ -88,20 +88,20 @@ contains
 !         integer, parameter :: nx = 51 
 !         integer, parameter :: nz = 101 
         integer, parameter :: ng = 3          ! exponent
-        real(4), parameter :: rho = 910.0     ! kg/m^3
-        real(4), parameter :: g = 9.81        ! m/s
-        real(4), parameter :: A = 10.0**(-16) ! Pa^3/a
-!         real(4), parameter :: M = 0.1         ! m/a
-!         real(4), parameter :: L = 10.0**6     ! m 
+        real(prec), parameter :: rho = 910.0     ! kg/m^3
+        real(prec), parameter :: g = 9.81        ! m/s
+        real(prec), parameter :: A = 10.0**(-16) ! Pa^3/a
+!         real(prec), parameter :: M = 0.1         ! m/a
+!         real(prec), parameter :: L = 10.0**6     ! m 
 
         ! Loaded parameters
         integer :: nx, nz 
-        real(4) :: M, L 
+        real(prec) :: M, L 
 
         ! Local variables 
         integer :: i, j 
-        real(4) :: H0, dHdx, H 
-        real(4) :: GG, B 
+        real(prec) :: H0, dHdx, H 
+        real(prec) :: GG, B 
 
         ! Load parameters 
         call nml_read(filename,"rh_par","nx",nx)
@@ -151,7 +151,7 @@ contains
         do i = 1, prof%nz 
             prof%sigma(i) = 0.0 + (i-1)/real(prof%nz-1) * 1.0 
         end do 
-        prof%sigma(1) = 1e-6   ! To avoid singularities 
+        prof%sigma(1) = 1e-8   ! To avoid singularities 
 
         ! Calculate H0 (should be H0=3598.4 m)
         H0 = (20.0*M/A)**(1.0/(2.0*(ng+1)))*(1/(rho*g))**(ng/(2.0*(ng+1)))*L**(1.0/2.0)
@@ -183,12 +183,12 @@ contains
         end do 
 
         ! Calculate analytical age at the divide
-        prof%age = (H0/GG)*log(prof%sigma)
-        prof%age(1) = prof%age(2)
+        prof%age    = (H0/GG)*log(prof%sigma)
+        prof%age(1) = (H0/GG)*log(1e-8)
         
 !         ! Write summary 
 !         write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 
-        write(*,"(a,500f8.2)") "sigma: ", prof%sigma 
+!         write(*,"(a,500f8.2)") "sigma: ", prof%sigma 
 !         write(*,"(a,f10.2)") "H0 = ", H0 
 !         write(*,"(a,2f10.2)") "range(ux): ", minval(prof%ux), maxval(prof%ux)
 !         write(*,"(a,2f10.2)") "range(uz): ", minval(prof%uz), maxval(prof%uz) 

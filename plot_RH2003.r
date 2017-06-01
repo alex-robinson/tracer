@@ -26,24 +26,92 @@ filt_tracers = function(trc)
     return(dat)
 }
 
+calc_profile_RH2003 = function(x=NULL,z=NULL)
+{
+        # Define a 2D profile (x-z) following 
+        # Rybak and Huybrechts (2003, Annals of Glaciology)
 
+        if (is.null(x)) x = seq(0,1000,length.out=51)
+        if (is.null(z)) z = seq(0,1,length.out=101)
+
+        # Local parameters 
+        nx  = length(x)
+        nz  = length(z)
+        ng  = 3           # exponent
+        rho = 910.0       # kg/m^3
+        g   = 9.81        # m/s
+        A   = 10.0^(-16)  # Pa^3/a
+        M   = 0.1         # m/a
+        L   = 10.0^6      # m 
+
+        GG = M 
+        B  = 0 
+
+        xc = x*1e-3   # [km] => [m] 
+        sigma = z 
+
+        # Calculate H0 (should be H0=3598.4 m)
+        H0 = (20.0*M/A)^(1.0/(2.0*(ng+1)))*(1/(rho*g))^(ng/(2.0*(ng+1)))*L^(1.0/2.0)
+        
+        prof = list(x=x,z=z,xc=xc,sigma=sigma,H0=H0,GG=GG)
+
+        # Calculate H(x) 
+        prof$H = H0 * (1.0-(abs(prof$xc)/L)^((ng+1.0)/ng))^(ng/(2.0*(ng+1.0)))
+
+        prof$ux   = array(0.0,dim=c(nx,nz)) 
+        prof$uz   = array(0.0,dim=c(nx,nz))
+        prof$age  = rep(0.0,nz)
+        prof$dHdx = array(0.0,dim=c(nx,nz))
+
+        # Calculate velocities 
+        for (i in 1:(nx-1)) {
+            dHdx = (prof$H[i+1]-prof$H[i])/(prof$xc[i+1]-prof$xc[i])
+            prof$dHdx[i] = dHdx
+
+            H    = prof$H[i] 
+            for (j in 1:nz) {
+
+                prof$ux[i,j] = -(2.0*A)/(ng+1.0)*(rho*g)^ng * dHdx^(ng-1.0) *
+                  dHdx * (H^(ng+1.0)-(H-prof$sigma[j]*H)^(ng+1.0))
+
+                prof$uz[i,j] = prof$sigma[j]*(-GG+B+prof$ux[i,j]*dHdx) - B
+
+                
+            }
+        } 
+
+        # Calculate analytical age at the divide
+        prof$age    = (H0/GG)*log(prof$sigma)
+        
+        return(prof)
+}
+
+calc_rh_age = function(sigma,H0,GG)
+{
+    # Calculate analytical age at the divide
+    age    = (H0/GG)*log(sigma)
+
+    return(age)
+}
 
 # Load data 
 if (TRUE) {
 
-    rh     = my.read.nc("output/profile_RH2003.nc")
-    # rh$x   = rh$x*1e-3 
-    rh$age = rh$age*1e-3 
+    rh0     = my.read.nc("output/profile_RH2003.nc")
+    # rh0$x   = rh0$x*1e-3 
+    rh0$age = rh0$age*1e-3 
 
     trc = my.read.nc("output/profile_RH2003_trc1.nc")
     trc$time     = trc$time*1e-3
     trc$dep_time = trc$dep_time*1e-3
+    trc$age      = -trc$age*1e-3 
 
-    trcmax = filt_tracers(trc)
-
-    trcmax$rh_age  = approx(x=rh$sigma*max(rh$H),y=rh$age,xout=trcmax$z)$y
-    trcmax$age_err = 100* (trcmax$dep_time - trcmax$rh_age) / trcmax$rh_age
-
+    rh = calc_profile_RH2003()
+    trc$rh_age = calc_rh_age(sigma=trc$z/max(rh$H),H0=rh$H0,GG=rh$GG)*1e-3
+    trc$age_err = (trc$age - trc$rh_age)
+    trc$age_err_p = 100* (trc$age - trc$rh_age) / trc$rh_age
+    trc$age_err_p[abs(trc$age)<1e-1] = NA 
+    
 }
 
 ptype = "png"
@@ -52,9 +120,9 @@ colax = "grey40"
 # Plot comparison at dome
 if (TRUE) {
 
-    xlim  = c(-165,5)
+    xlim  = c(-164,5)
     ylim  = c(-0.01,1.02)
-    xlim1 = range(abs(trcmax$age_err))
+    xlim1 = range(abs(trc$age_err))
     xlim1 = c(1e-2,10)
 
     x.at  = seq(-160,0,by=40)
@@ -72,9 +140,9 @@ if (TRUE) {
     axis(2,at=y.at)
     abline(v=x.at,h=y.at,lwd=1,lty=2,col="lightgrey")
 
-    lines(rh$age,rh$sigma,lwd=4,col=1)
-    points(trcmax$dep_time,trcmax$z/max(rh$H),col=2,cex=0.8)
-
+    lines(trc$rh_age,trc$z/max(rh$H),col=1,lwd=4)
+    lines(trc$age,trc$z/max(rh$H),col=2,lwd=3,lty=2)
+    
     box()
 
     par(new=TRUE,plt=c(0.65,0.95,0.1,0.95),xaxs="i",yaxs="i")
@@ -86,7 +154,8 @@ if (TRUE) {
     abline(v=x.at1,h=y.at,lwd=1,lty=2,col="lightgrey")
 
     abline(v=0,lwd=4,col=1)
-    points(abs(trcmax$age_err),trcmax$z/max(rh$H),col=2,cex=0.8)
+    # points(abs(trcmax$age_err),trcmax$z/max(rh$H),col=2,cex=0.8)
+    lines(abs(trc$age_err_p),trc$z/max(rh$H),col=2,lwd=2)
 
     box() 
 

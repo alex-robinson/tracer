@@ -30,12 +30,12 @@ contains
         character(len=*),     intent(IN)  :: filename 
         real(prec), intent(IN) :: x(:)
         logical,    intent(IN) :: is_sigma 
-        real(4) :: time 
+        real(prec) :: time 
 
-        real(prec) :: y(2) 
+        real(prec) :: y(5) 
 
         ! Define the ghost y-dimension
-        y(1:2) = [0.0,1.0] 
+        y(1:5) = [0.0,0.25,0.50,0.75,1.0] 
 
         ! Call 3D tracer_init
         call tracer_init(trc,filename,time,x,y,is_sigma)
@@ -57,23 +57,26 @@ contains
         logical,    intent(IN) :: dep_now, stats_now 
 
         ! Local variables
-        real(prec) :: y(2) 
+        real(prec) :: y(5) 
         real(prec), allocatable :: z_srf_2D(:,:), H_2D(:,:)
         real(prec), allocatable :: ux_3D(:,:,:), uy_3D(:,:,:), uz_3D(:,:,:)
-        integer :: j 
+        integer :: j, ny 
+
+        ny = size(y,1)
 
         ! Define ghost dimension and data 
-        allocate(z_srf_2D(size(x,1),2))
-        allocate(H_2D(size(x,1),2))
-        allocate(ux_3D(size(ux,1),2,size(ux,2)))
-        allocate(uy_3D(size(ux,1),2,size(ux,2)))
-        allocate(uz_3D(size(ux,1),2,size(ux,2)))
+        allocate(z_srf_2D(size(x,1),ny))
+        allocate(H_2D(size(x,1),ny))
+        allocate(ux_3D(size(ux,1),ny,size(ux,2)))
+        allocate(uy_3D(size(ux,1),ny,size(ux,2)))
+        allocate(uz_3D(size(ux,1),ny,size(ux,2)))
 
         ! Set y-dimension to one value of zero
-        y(1:2) = [0.0,1.0] 
+!         y(1:2) = [0.0,1.0] 
+        y(1:5) = [0.0,0.25,0.50,0.75,1.0] 
 
         ! Reshape input data with a ghost y-dimension of length two
-        do j = 1, 2
+        do j = 1, size(y)
             z_srf_2D(:,j) = z_srf 
             H_2D(:,j)     = H 
             ux_3D(:,j,:)  = ux 
@@ -172,6 +175,10 @@ contains
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
         call nc_write(path_out,"uz",trc%now%uz,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
+        call nc_write(path_out,"ax",trc%now%ax,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
+        call nc_write(path_out,"az",trc%now%az,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
         call nc_write(path_out,"thk",trc%now%thk,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"T",trc%now%T,dim1="pt",dim2="time", missing_value=MV, &
@@ -182,6 +189,11 @@ contains
         call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(MV), &
                         start=[1,nt],count=[trc%par%n ,1])
 
+        tmp = MV
+        where(trc%now%x .ne. MV) tmp = time - trc%dep%time 
+        call nc_write(path_out,"age",tmp,dim1="pt",dim2="time", missing_value=MV, &
+                        start=[1,nt],count=[trc%par%n ,1],units="a")
+        
         ! Write deposition information
         call nc_write(path_out,"dep_time",trc%dep%time,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1])

@@ -2,9 +2,10 @@ module tracer_precision
 
     implicit none 
 
-    integer,  parameter :: dp  = kind(1.d0)
     integer,  parameter :: sp  = kind(1.0)
-    
+    integer,  parameter :: dp  = kind(1.d0)
+!     integer,  parameter :: qp  = REAL128
+
     ! Precision used here
     integer,  parameter :: prec = sp 
 

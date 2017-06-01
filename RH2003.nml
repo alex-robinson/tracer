@@ -1,6 +1,6 @@
 
 &tracer_par
-    n         = 1000
+    n         = 1
     n_max_dep = 1
     
     thk_min   = 1e-2            ! m (minimum thickness of tracer 'layer')
@@ -21,8 +21,8 @@
 /
 
 &rh_par
-    nx  = 51 
-    nz  = 101 
+    nx  = 51          ! default  51
+    nz  = 2           ! default 101
     M   = 0.1         ! m/a
     L   = 1e6         ! m 
 /
