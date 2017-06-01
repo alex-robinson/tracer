@@ -33,7 +33,7 @@ program tracertest
     call profile_write(prof1,fldr="output",filename="profile_RH2003.nc")
 
     fldr     = "output"
-    filename       = "profile_RH2003_trc1.nc"
+    filename       = "profile_RH2003_trc1_sp.nc"
     filename_stats = "profile_RH2003_trc1-stats.nc"
 
     ! Test tracer_update

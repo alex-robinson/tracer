@@ -97,20 +97,30 @@ calc_rh_age = function(sigma,H0,GG)
 # Load data 
 if (TRUE) {
 
+    rh = calc_profile_RH2003()
+
     rh0     = my.read.nc("output/profile_RH2003.nc")
-    # rh0$x   = rh0$x*1e-3 
     rh0$age = rh0$age*1e-3 
 
-    trc = my.read.nc("output/profile_RH2003_trc1.nc")
+    trc = my.read.nc("output/profile_RH2003_trc1_dp.nc")
     trc$time     = trc$time*1e-3
     trc$dep_time = trc$dep_time*1e-3
     trc$age      = -trc$age*1e-3 
 
-    rh = calc_profile_RH2003()
     trc$rh_age = calc_rh_age(sigma=trc$z/max(rh$H),H0=rh$H0,GG=rh$GG)*1e-3
     trc$age_err = (trc$age - trc$rh_age)
     trc$age_err_p = 100* (trc$age - trc$rh_age) / trc$rh_age
     trc$age_err_p[abs(trc$age)<1e-1] = NA 
+    
+    trc_sp = my.read.nc("output/profile_RH2003_trc1_sp.nc")
+    trc_sp$time     = trc_sp$time*1e-3
+    trc_sp$dep_time = trc_sp$dep_time*1e-3
+    trc_sp$age      = -trc_sp$age*1e-3 
+    
+    trc_sp$rh_age = calc_rh_age(sigma=trc_sp$z/max(rh$H),H0=rh$H0,GG=rh$GG)*1e-3
+    trc_sp$age_err = (trc_sp$age - trc_sp$rh_age)
+    trc_sp$age_err_p = 100* (trc_sp$age - trc_sp$rh_age) / trc_sp$rh_age
+    trc_sp$age_err_p[abs(trc_sp$age)<1e-1] = NA 
     
 }
 
@@ -159,6 +169,7 @@ if (TRUE) {
     abline(v=x.at1,h=y.at,lwd=1,lty=2,col="lightgrey")
 
     lines(trc$age_err*1e3,trc$z/max(rh$H),col=1,lwd=2)
+    # lines(trc_sp$age_err*1e3,trc_sp$z/max(rh$H),col=alpha(1,50),lwd=2)
 
     box() 
 
@@ -168,8 +179,10 @@ if (TRUE) {
     axis(3,at=x.at2,col=2,col.axis=2,col.lab=2,cex.axis=0.8,cex.lab=0.8)
 
     lines(abs(trc$age_err_p),trc$z/max(rh$H),col=2,lwd=1.5)
+    lines(abs(trc_sp$age_err_p),trc_sp$z/max(rh$H),col=alpha(2,50),lwd=1.5)
 
-    
+    text(xlim2[2],mean(ylim),pos=2,cex=0.8,col=alpha(2,50),"Single prec.")
+
     graphics.off()
 
 }
