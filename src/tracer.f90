@@ -288,12 +288,10 @@ contains
 
             if (trc%now%active(i) .eq. 2) then 
 
-                ! == TO DO: We need 3D interpolation here!!!
-
-                ! 1. Calc bilin weights at x/y locations
-                ! 2. Get H and z-axis at that location
-                ! 3. Calculate lin weights for z values 
-                ! 4. Perform trilinear interpolation 
+                ! Temporarily store velocity of this time step (for accelaration calculation)
+                ux0 = trc%now%ux(i)
+                uy0 = trc%now%uy(i)
+                uz0 = trc%now%uz(i) 
 
                 ! Linear interpolation used for surface position 
                 par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
@@ -306,25 +304,17 @@ contains
                 ! Note: equivalent to (z_srf - depth) = trc%now%z_srf(i) - (1.0-z1)*trc%now%H(i)
                 zc = (trc%now%z_srf(i)-trc%now%H(i)) + z1*trc%now%H(i)
 
-                ! Temporarily store velocity of this time step (for accelaration calculation)
-                ux0 = trc%now%ux(i)
-                uy0 = trc%now%uy(i)
-                uz0 = trc%now%uz(i) 
-
                 if (trim(trc%par%interp_method) .eq. "linear") then 
                     ! Trilinear interpolation 
+
+                    ! Note: currently we redundantly obtain bilinear (horizontal) weights, because
+                    ! they are needed to calculate zc. In the future, this could be improved. 
 
                     par_lin = interp_trilinear_weights(x1,y1,zc,xout=trc%now%x(i),yout=trc%now%y(i),zout=trc%now%z(i))
 
                     trc%now%ux(i)  = interp_trilinear(par_lin,ux1)
                     trc%now%uy(i)  = interp_trilinear(par_lin,uy1)
                     trc%now%uz(i)  = interp_trilinear(par_lin,uz1)
-
-    !                 trc%now%ux(i)  = interp_bilinear(par_lin,ux1(:,:,nz))
-    !                 trc%now%uy(i)  = interp_bilinear(par_lin,uy1(:,:,nz))
-    !                 trc%now%uz(i)  = interp_bilinear(par_lin,uz1(:,:,nz))
-    !                 ! Until trilinear interp is ready, maintain z-position at surface
-    !                 trc%now%z(i)   = interp_bilinear(par_lin,z_srf1)
 
                 else
                     ! Spline interpolation 
@@ -339,10 +329,11 @@ contains
                 trc%now%ay(i) = (trc%now%uy(i) - uy0) / trc%par%dt
                 trc%now%az(i) = (trc%now%uz(i) - uz0) / trc%par%dt
 
+                ! Filler values of the tracer state, in the future these should
+                ! equal the surface temperature and the accumulation rate at the time of
+                ! deposition and be calculated otherwise
                 trc%now%T(i)   = 260.0 
                 trc%now%thk(i) = 0.3 
-
-!                 write(*,*) i, trc%now%z(i), trc%now%uz(i), maxval(zc), maxval(z1)
 
             end if 
 
