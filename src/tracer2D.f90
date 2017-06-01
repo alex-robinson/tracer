@@ -165,20 +165,16 @@ contains
         where(trc%now%x .ne. MV) tmp = trc%now%x*1e-3
         call nc_write(path_out,"x",tmp,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
-        call nc_write(path_out,"z",trc%now%z,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"z",real(trc%now%z,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"dpth",trc%now%dpth,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"z_srf",trc%now%z_srf,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"ux",trc%now%ux,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"ux",real(trc%now%ux,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"uz",trc%now%uz,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"uz",real(trc%now%uz,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"ax",trc%now%ax,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
-        call nc_write(path_out,"az",trc%now%az,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
         call nc_write(path_out,"thk",trc%now%thk,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"T",trc%now%T,dim1="pt",dim2="time", missing_value=MV, &

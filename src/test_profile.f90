@@ -24,7 +24,7 @@ program tracertest
     type(profile_class) :: prof1 
     
     integer :: k, kmax, q 
-    real(prec) :: time, time_end, dt  
+    real(prec) :: time, time_start, time_end, dt  
     real(prec) :: dt_write, dt_write_now  
     logical             :: dep_now 
     real(prec)          :: dt_dep 
@@ -37,9 +37,9 @@ program tracertest
     filename_stats = "profile_RH2003_trc1-stats.nc"
 
     ! Test tracer_update
-    time     = -160000.0 
-    time_end = 0.0
-    dt       = 10.0 
+    time_start = -160000.0 
+    time_end   = 0.0
+    dt         = 5.0 
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,is_sigma=.TRUE.)
@@ -50,9 +50,9 @@ program tracertest
 
     dt_write_now = 0.0 
 
-    do k = 1, int((time_end-time)/dt)+1 
+    do k = 1, int((time_end-time_start)/dt)+1 
 
-        if (k .gt. 1) time = time + dt 
+        time = time_start + dt*(k-1) 
 
         dep_now  = .FALSE.
         if (mod(time,dt_dep) .eq. 0.0) dep_now = .TRUE. 
@@ -65,7 +65,7 @@ program tracertest
         if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
             call tracer2D_write(trc1,time,fldr,filename)
             dt_write_now = 0.0 
-            write(*,*) "time = ", time, trc1%par%n_active
+            write(*,*) "time = ", time, trc1%par%dt, trc1%par%n_active
         end if 
 
     end do 

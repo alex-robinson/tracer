@@ -127,7 +127,7 @@ if (TRUE) {
     x.at  = seq(-160,0,by=40)
     x.lab = abs(x.at)
 
-    xlim1 = c(-1e-2,1e-2)*1e3
+    xlim1 = c(-1e-4,1e-4)*1e3
     x.at1 = pretty(xlim1)
     xlim2 = c(1e-6,1)
     x.at2 = c(1e-6,1e-4,0.001,0.01,0.1,1)

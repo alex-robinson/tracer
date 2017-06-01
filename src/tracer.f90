@@ -13,7 +13,8 @@ module tracer
     type tracer_par_class 
         integer :: n, n_active, n_max_dep, id_max 
         logical :: is_sigma                     ! Is the defined z-axis in sigma coords
-        real(prec) :: time_now, time_old, dt
+        real(prec) :: time_now, time_old
+        real(prec_hi) :: dt
         real(prec) :: time_dep, time_write 
         real(prec) :: thk_min                   ! Minimum thickness of tracer (m)
         real(prec) :: H_min                     ! Minimum ice thickness to track (m)
@@ -30,11 +31,11 @@ module tracer
     end type 
 
     type tracer_state_class 
-        integer,    allocatable :: active(:), id(:)
-        real(prec), allocatable :: x(:), y(:), z(:), sigma(:)
+        integer, allocatable :: active(:), id(:)
+        real(prec_hi), allocatable :: x(:), y(:), z(:), sigma(:)
+        real(prec_hi), allocatable :: ux(:), uy(:), uz(:)
+        real(prec_hi), allocatable :: ax(:), ay(:), az(:)
         real(prec), allocatable :: dpth(:), z_srf(:)
-        real(prec), allocatable :: ux(:), uy(:), uz(:)
-        real(prec), allocatable :: ax(:), ay(:), az(:)
         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
         real(prec), allocatable :: T(:)              ! Current temperature of the tracer (for borehole comparison, internal melting...)
         real(prec), allocatable :: H(:)
@@ -195,18 +196,20 @@ contains
         character(len=3) :: idx_order 
         integer    :: i, j, k, nx, ny, nz
         logical    :: rev_z 
-        real(prec), allocatable :: x1(:), y1(:), z1(:)
-        real(prec), allocatable :: zc(:)   ! Actual cartesian z-axis after applying sigma*H 
-        real(prec), allocatable :: z_srf1(:,:), H1(:,:)
-        real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
-        real(prec), allocatable :: usig1(:,:,:)
-        real(prec) :: ux0, uy0, uz0 
+        real(prec_hi), allocatable :: x1(:), y1(:), z1(:)
+        real(prec_hi), allocatable :: zc(:)   ! Actual cartesian z-axis after applying sigma*H 
+        real(prec_hi), allocatable :: z_srf1(:,:), H1(:,:)
+        real(prec_hi), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
+        real(prec_hi), allocatable :: usig1(:,:,:)
+        real(prec_hi) :: ux0, uy0, uz0 
+        real(prec_hi) :: dt 
 
-        ! Update current time 
+        ! Update current time and time step
         trc%par%time_old = trc%par%time_now 
         trc%par%time_now = time 
-        trc%par%dt       = trc%par%time_now - trc%par%time_old 
+        trc%par%dt       = dble(trc%par%time_now) - dble(trc%par%time_old)
 
+        ! Update record of last deposition time if dep_now
         if (dep_now) trc%par%time_dep = trc%par%time_now 
 
         ! Determine order of indices (default ijk)
@@ -249,7 +252,7 @@ contains
 
         call tracer_reshape1D_vec(x, x1,rev=.FALSE.)
         call tracer_reshape1D_vec(y, y1,rev=.FALSE.)
-        call tracer_reshape1D_vec(zc,z1,rev=rev_z)
+        call tracer_reshape1D_vec(real(zc,kind=prec),z1,rev=rev_z)
         call tracer_reshape2D_field(idx_order,z_srf,z_srf1)
         call tracer_reshape2D_field(idx_order,H,H1)
         call tracer_reshape3D_field(idx_order,ux,ux1,rev_z=rev_z)
@@ -448,8 +451,8 @@ contains
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
-        real(prec), intent(IN) :: x(:), y(:)
-        real(prec), intent(IN) :: H(:,:)
+        real(prec_hi), intent(IN) :: x(:), y(:)
+        real(prec_hi), intent(IN) :: H(:,:)
         integer, intent(IN) :: nmax  
 
         integer :: ntot  
@@ -544,8 +547,8 @@ contains
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
-        real(prec), intent(IN) :: x(:), y(:) 
-        real(prec), intent(IN) :: Hmax 
+        real(prec_hi), intent(IN) :: x(:), y(:) 
+        real(prec_hi), intent(IN) :: Hmax 
 
         ! Deactivate points where:
         !  - Thickness of ice sheet at point's location is below threshold
@@ -593,16 +596,18 @@ contains
 
         implicit none 
 
-        real(prec), intent(INOUT) :: x, y, z 
-        real(prec), intent(IN)    :: ux, uy, uz 
-        real(prec), intent(IN)    :: ax, ay, az 
-        real(prec), intent(IN)    :: dt 
-        integer,    intent(IN)    :: active 
+        real(prec_hi), intent(INOUT) :: x, y, z 
+        real(prec_hi), intent(IN)    :: ux, uy, uz 
+        real(prec_hi), intent(IN)    :: ax, ay, az 
+        real(prec_hi), intent(IN)    :: dt 
+        integer,       intent(IN)    :: active 
 
         if (active .gt. 0) then 
+
             x = x + ux*dt + 0.5*ax*dt**2 
             y = y + uy*dt + 0.5*ay*dt**2 
             z = z + uz*dt + 0.5*az*dt**2
+            
         end if 
 
         return 
@@ -613,7 +618,7 @@ contains
 
         implicit none 
 
-        real(prec), intent(IN) :: H(:,:)
+        real(prec_hi), intent(IN) :: H(:,:)
         real(prec), intent(IN) :: H_min, alpha 
         character(len=*), intent(IN) :: dist 
         real(prec) :: p(size(H,1),size(H,2))
@@ -1003,8 +1008,8 @@ contains
 
         implicit none 
      
-        real(prec), intent(IN) :: var(:)
-        real(prec), intent(INOUT), allocatable :: var1(:)
+        real(prec),    intent(IN) :: var(:)
+        real(prec_hi), intent(INOUT), allocatable :: var1(:)
         logical,    intent(IN) :: rev 
 
         integer :: i, nx
@@ -1030,8 +1035,8 @@ contains
         implicit none 
 
         character(len=3), intent(IN) :: idx_order 
-        real(prec), intent(IN) :: var(:,:)
-        real(prec), intent(INOUT), allocatable :: var1(:,:)
+        real(prec),    intent(IN) :: var(:,:)
+        real(prec_hi), intent(INOUT), allocatable :: var1(:,:)
         integer :: i, j
         integer :: nx, ny
 
@@ -1080,8 +1085,8 @@ contains
         implicit none 
 
         character(len=3), intent(IN) :: idx_order 
-        real(prec), intent(IN) :: var(:,:,:)
-        real(prec), intent(INOUT), allocatable :: var1(:,:,:)
+        real(prec),    intent(IN) :: var(:,:,:)
+        real(prec_hi), intent(INOUT), allocatable :: var1(:,:,:)
         logical,    intent(IN) :: rev_z   ! Reverse the z-axis? 
         integer :: i, j, k
         integer :: nx, ny, nz 
@@ -1213,25 +1218,18 @@ contains
         where(trc%now%y .ne. MV) tmp = trc%now%y*1e-3
         call nc_write(path_out,"y",tmp,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
-        call nc_write(path_out,"z",trc%now%z,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"z",real(trc%now%z,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"dpth",trc%now%dpth,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"z_srf",trc%now%z_srf,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"ux",trc%now%ux,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"ux",real(trc%now%ux,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"uy",trc%now%uy,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"uy",real(trc%now%uy,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"uz",trc%now%uz,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"uz",real(trc%now%uz,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"ax",trc%now%ax,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
-        call nc_write(path_out,"ay",trc%now%ay,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
-        call nc_write(path_out,"az",trc%now%az,dim1="pt",dim2="time", missing_value=MV, &
-                        start=[1,nt],count=[trc%par%n ,1],units="m/a**2")
-        
         call nc_write(path_out,"thk",trc%now%thk,dim1="pt",dim2="time", missing_value=MV, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"T",trc%now%T,dim1="pt",dim2="time", missing_value=MV, &
