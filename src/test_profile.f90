@@ -10,15 +10,17 @@ program tracertest
     implicit none 
 
     type(tracer_class) :: trc1
-    character(len=128) :: fldr, filename, filename_stats 
+    character(len=128) :: fldr 
 
     type profile_class 
         integer :: nx, nz
-        integer, allocatable :: dims(:) 
+        integer, allocatable :: dims(:)
+        real(prec) :: L, A, H0, G, B, M  
         real(prec), allocatable :: xc(:), sigma(:)
         real(prec), allocatable :: zs(:), zb(:), H(:), dHdx(:), ux(:,:), uz(:,:)
         real(prec), allocatable :: age(:)
 
+        character(len=512) :: filename
     end type 
 
     type(profile_class) :: prof1 
@@ -33,9 +35,7 @@ program tracertest
     call profile_write(prof1,fldr="output",filename="profile_RH2003.nc")
 
     fldr     = "output"
-    filename       = "profile_RH2003_trc1_sp.nc"
-    filename_stats = "profile_RH2003_trc1-stats.nc"
-
+    
     ! Test tracer_update
     time_start = -160000.0 
     time_end   = 0.0
@@ -43,7 +43,7 @@ program tracertest
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,is_sigma=.TRUE.)
-    call tracer2D_write_init(trc1,fldr,filename)
+    call tracer2D_write_init(trc1,fldr,prof1%filename)
 
     dt_write = 100.0 
     dt_dep   = 250.0 
@@ -63,7 +63,7 @@ program tracertest
 
         if (k .gt. 1) dt_write_now = dt_write_now+dt 
         if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
-            call tracer2D_write(trc1,time,fldr,filename)
+            call tracer2D_write(trc1,time,fldr,prof1%filename)
             dt_write_now = 0.0 
             write(*,*) "time = ", time, trc1%par%dt, trc1%par%n_active
         end if 
@@ -87,35 +87,35 @@ contains
         ! Local parameters 
 !         integer, parameter :: nx = 51 
 !         integer, parameter :: nz = 101 
-        integer,    parameter :: ng = 3          ! exponent
+        integer,    parameter :: ng  = 3          ! exponent
         real(prec), parameter :: rho = 910.0     ! kg/m^3
-        real(prec), parameter :: g = 9.81        ! m/s
-        real(prec), parameter :: A = 10.0**(-16) ! Pa^3/a
+        real(prec), parameter :: gg  = 9.81        ! m/s
+        real(prec), parameter :: A   = 10.0**(-16) ! Pa^3/a
 !         real(prec), parameter :: M = 0.1         ! m/a
 !         real(prec), parameter :: L = 10.0**6     ! m 
 
         ! Loaded parameters
         integer :: nx, nz 
-        real(prec) :: M, L 
+        real(prec) :: L, G, B 
 
         ! Local variables 
         integer :: i, j 
         real(prec) :: H0, dHdx, H 
-        real(prec) :: GG, B 
+        real(prec) :: M
+        character(len=5) :: str_nx, str_nz, str_prec 
 
         ! Load parameters 
         call nml_read(filename,"rh_par","nx",nx)
         call nml_read(filename,"rh_par","nz",nz)
-        call nml_read(filename,"rh_par","M", M)
         call nml_read(filename,"rh_par","L", L)
+        call nml_read(filename,"rh_par","G", G)
+        call nml_read(filename,"rh_par","B", B)
         
+        M = G - B  
 
-        GG = M 
-        B  = 0 
-
-        prof%nz = nz
         prof%nx = nx    ! Right-hand side symmetrical of domain
-
+        prof%nz = nz
+        
         allocate(prof%xc(prof%nx))
         allocate(prof%sigma(prof%nz))
         allocate(prof%zs(prof%nx))
@@ -142,7 +142,7 @@ contains
         prof%sigma(1) = 1e-8   ! To avoid singularities 
 
         ! Calculate H0 (should be H0=3598.4 m)
-        H0 = (20.0*M/A)**(1.0/(2.0*(ng+1)))*(1/(rho*g))**(ng/(2.0*(ng+1)))*L**(1.0/2.0)
+        H0 = (20.0*M/A)**(1.0/(2.0*(ng+1)))*(1/(rho*gg))**(ng/(2.0*(ng+1)))*L**(1.0/2.0)
         
         ! Calculate H(x) 
         prof%H = H0 * (1.0-(abs(prof%xc)/L)**((ng+1.0)/ng))**(real(ng)/(2.0*(ng+1.0)))
@@ -161,17 +161,17 @@ contains
             H    = prof%H(i) 
             do j = 1, prof%nz
 
-                prof%ux(i,j) = -(2.0*A)/(ng+1.0)*(rho*g)**ng * dHdx**(ng-1.0) &
+                prof%ux(i,j) = -(2.0*A)/(ng+1.0)*(rho*gg)**ng * dHdx**(ng-1.0) &
                   * dHdx * (H**(ng+1.0)-(H-prof%sigma(j)*H)**(ng+1.0))
                 prof%ux(i,j) = 0.0
-                prof%uz(i,j) = prof%sigma(j)*(-GG+B+prof%ux(i,j)*dHdx) - B
+                prof%uz(i,j) = prof%sigma(j)*(-G+B+prof%ux(i,j)*dHdx) - B
 
                 
             end do 
         end do 
 
         ! Calculate analytical age at the divide
-        prof%age    = (H0/GG)*log(prof%sigma)
+        prof%age    = (H0/G)*log(prof%sigma)
         
 !         ! Write summary 
 !         write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 
@@ -179,6 +179,30 @@ contains
 !         write(*,"(a,f10.2)") "H0 = ", H0 
 !         write(*,"(a,2f10.2)") "range(ux): ", minval(prof%ux), maxval(prof%ux)
 !         write(*,"(a,2f10.2)") "range(uz): ", minval(prof%uz), maxval(prof%uz) 
+        
+        ! Additionally store constants and parameters 
+        prof%L  = L 
+        prof%nx = nx 
+        prof%nz = nz 
+        prof%H0 = H0 
+        prof%A  = A 
+        prof%G  = G 
+        prof%B  = B 
+        prof%M  = M 
+        
+        write(str_nx,"(i5)") prof%nx
+        str_nx = adjustl(str_nx) 
+        write(str_nz,"(i5)") prof%nz 
+        str_nz = adjustl(str_nz)
+        write(str_prec,*) "sp"
+        if (kind(1.d0)==prec) write(str_prec,*) "dp"
+        str_prec = adjustl(str_prec)
+
+        ! Generate filename based on parameter values 
+        write(prof%filename,"(a,a,a1,a,a1,f4.2,a1,f4.2,a1,a,a3)") &
+            "RH2003_", trim(str_nx), "_", trim(str_nz),"_", prof%G, "_", prof%B,"_",trim(str_prec),".nc"
+
+        write(*,*) "Filename: ", trim(prof%filename)
 
         return 
 
@@ -200,7 +224,18 @@ contains
         call nc_create(path_out)
         call nc_write_dim(path_out,"xc",x=prof%xc*1e-3,units="kilometers")
         call nc_write_dim(path_out,"sigma",x=prof%sigma,units="1")
+        call nc_write_dim(path_out,"par",x=1)
 
+        ! Write parameters 
+        call nc_write(path_out,"nx",  prof%nx,  dim1="par")
+        call nc_write(path_out,"nz",  prof%nz,  dim1="par")
+        call nc_write(path_out,"L",   prof%L,   dim1="par")
+        call nc_write(path_out,"H0",  prof%H0,  dim1="par")
+        call nc_write(path_out,"A",   prof%A,   dim1="par")
+        call nc_write(path_out,"G",   prof%G,   dim1="par")
+        call nc_write(path_out,"B",   prof%B,   dim1="par")
+        call nc_write(path_out,"M",   prof%M,   dim1="par")
+        
         call nc_write(path_out,"H",   prof%H,   dim1="xc",missing_value=MV)
         call nc_write(path_out,"dHdx",prof%dHdx,dim1="xc",missing_value=MV)
         call nc_write(path_out,"ux",prof%ux,dim1="xc",dim2="sigma",missing_value=MV)
@@ -208,6 +243,7 @@ contains
         call nc_write(path_out,"umag",sqrt(prof%ux**2+prof%uz**2),dim1="xc",dim2="sigma",missing_value=MV)
         call nc_write(path_out,"age",prof%age,dim1="sigma",missing_value=MV)
         
+
         return 
 
     end subroutine profile_write 

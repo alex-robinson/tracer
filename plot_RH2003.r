@@ -112,7 +112,7 @@ if (TRUE) {
     trc$age_err_p = 100* (trc$age - trc$rh_age) / trc$rh_age
     trc$age_err_p[abs(trc$age)<1e-1] = NA 
     
-    trc_sp = my.read.nc("output/profile_RH2003_trc1_sp.nc")
+    trc_sp = my.read.nc("output/RH2003_51_2_0.10_0.00_sp.nc")
     trc_sp$time     = trc_sp$time*1e-3
     trc_sp$dep_time = trc_sp$dep_time*1e-3
     trc_sp$age      = -trc_sp$age*1e-3 

@@ -23,6 +23,7 @@
 &rh_par
     nx  = 51          ! default  51
     nz  = 2           ! default 101
-    M   = 0.1         ! m/a
-    L   = 1e6         ! m 
+    L   = 1e6         ! [m] Length 
+    G   = 0.1         ! [m/a] Accumulation rate 
+    B   = 0.0         ! [m/a] Basal melt rate  
 /
