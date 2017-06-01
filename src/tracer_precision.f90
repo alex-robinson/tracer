@@ -6,7 +6,7 @@ module tracer_precision
     integer,  parameter :: dp  = kind(1.d0)
 
     ! Precision used here
-    integer,  parameter :: prec    = dp 
+    integer,  parameter :: prec    = sp 
     integer,  parameter :: prec_hi = dp 
 
     ! Missing value aliases 
