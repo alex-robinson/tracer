@@ -116,7 +116,7 @@ contains
         character(len=*),     intent(IN)  :: filename 
         real(prec), intent(IN) :: x(:), y(:)
         logical,    intent(IN) :: is_sigma  
-        real(prec) :: time 
+        real(prec), intent(IN) :: time 
 
         ! Local variables 
         integer :: i 
@@ -167,7 +167,7 @@ contains
         trc%par%id_max    = 0 
 
         ! Initialize the time (to one older than now)
-        trc%par%time_now   = time - 1000.0
+        trc%par%time_now   = time - 1000.0_dp
         trc%par%time_dep   = time - 1000.0 
         trc%par%time_write = time - 1000.0 
 

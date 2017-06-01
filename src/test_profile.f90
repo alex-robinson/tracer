@@ -39,7 +39,7 @@ program tracertest
     ! Test tracer_update
     time     = -160000.0 
     time_end = 0.0
-    dt       = 1.0 
+    dt       = 10.0 
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,is_sigma=.TRUE.)
@@ -59,7 +59,7 @@ program tracertest
 
         call tracer2D_update(trc1,time=time, &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
-                             ux=prof1%ux*0.0,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
+                             ux=prof1%ux,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
 
         if (k .gt. 1) dt_write_now = dt_write_now+dt 
         if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
@@ -87,7 +87,7 @@ contains
         ! Local parameters 
 !         integer, parameter :: nx = 51 
 !         integer, parameter :: nz = 101 
-        integer, parameter :: ng = 3          ! exponent
+        integer,    parameter :: ng = 3          ! exponent
         real(prec), parameter :: rho = 910.0     ! kg/m^3
         real(prec), parameter :: g = 9.81        ! m/s
         real(prec), parameter :: A = 10.0**(-16) ! Pa^3/a
@@ -133,18 +133,6 @@ contains
             prof%xc(i) = 0.0 + (i-1)/real(nx-1) * 1000.0 
         end do
 
-!         if (prof%nx .lt. 100) then
-!             ! Define x-dimension (0-1000 km) 
-!             do i = 1, prof%nx 
-!                 prof%xc(i) = 0.0 + (i-1)/real(nx-1) * 1000.0 
-!             end do
-!         else
-!             ! Define x-dimension (1000-1000 km)
-!             do i = 1, prof%nx 
-!                 prof%xc(i) = -1000.0 + (i-1)/real(nx-1) * 1000.0 
-!             end do 
-!         end if 
-
         prof%xc = prof%xc*1e3   ! [km] => [m] 
 
         ! Define z-dimension (0-1 sigma)
@@ -175,7 +163,7 @@ contains
 
                 prof%ux(i,j) = -(2.0*A)/(ng+1.0)*(rho*g)**ng * dHdx**(ng-1.0) &
                   * dHdx * (H**(ng+1.0)-(H-prof%sigma(j)*H)**(ng+1.0))
-
+                prof%ux(i,j) = 0.0
                 prof%uz(i,j) = prof%sigma(j)*(-GG+B+prof%ux(i,j)*dHdx) - B
 
                 
@@ -184,7 +172,6 @@ contains
 
         ! Calculate analytical age at the divide
         prof%age    = (H0/GG)*log(prof%sigma)
-        prof%age(1) = (H0/GG)*log(1e-8)
         
 !         ! Write summary 
 !         write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 

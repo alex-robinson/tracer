@@ -120,45 +120,56 @@ colax = "grey40"
 # Plot comparison at dome
 if (TRUE) {
 
-    xlim  = c(-164,5)
     ylim  = c(-0.01,1.02)
-    xlim1 = range(abs(trc$age_err))
-    xlim1 = c(1e-2,10)
-
-    x.at  = seq(-160,0,by=40)
     y.at  = seq(0,1,by=0.1)
-    x.at1 = c(0.001,0.01,0.1,1,10)
 
-    myfigure("plots","age_ice-divide",asp=1.4,pointsize=12,type=ptype)
+    xlim  = c(-164,5)
+    x.at  = seq(-160,0,by=40)
+    x.lab = abs(x.at)
+
+    xlim1 = c(-1e-2,1e-2)*1e3
+    x.at1 = pretty(xlim1)
+    xlim2 = c(1e-6,1)
+    x.at2 = c(1e-6,1e-4,0.001,0.01,0.1,1)
+    
+    
+    myfigure("plots","age_ice-divide",asp=1.4,pointsize=10,type=ptype)
     par(col=colax,col.axis=colax,col.lab=colax)
 
-    par(plt=c(0.1,0.55,0.1,0.95),xaxs="i",yaxs="i")
+    par(plt=c(0.1,0.55,0.1,0.9),xaxs="i",yaxs="i")
     plot(xlim,ylim,type="n",ann=FALSE,axes=FALSE)
     mtext(side=1,line=1.4,las=0,"Age (ka)")
     mtext(side=2,line=1.9,las=0,"Ice divide thickness (dimensionless)")
-    axis(1,at=x.at)
+    axis(1,at=x.at,lab=x.lab)
     axis(2,at=y.at)
     abline(v=x.at,h=y.at,lwd=1,lty=2,col="lightgrey")
 
-    lines(trc$rh_age,trc$z/max(rh$H),col=1,lwd=4)
-    lines(trc$age,trc$z/max(rh$H),col=2,lwd=3,lty=2)
+    lines(trc$rh_age,trc$z/max(rh$H),col=1,lwd=5)
+    lines(trc$age,trc$z/max(rh$H),col=4,lwd=2,lty=1)
     
+    legend("topleft",bty="n",inset=0.01,col=c(1,4),lwd=c(5,2),lty=c(1,1),
+        c("Analytical solution","Lagrangian tracer"),cex=0.8)
     box()
 
-    par(new=TRUE,plt=c(0.65,0.95,0.1,0.95),xaxs="i",yaxs="i")
-    plot(xlim1,ylim,type="n",ann=FALSE,axes=FALSE,log="x")
-    mtext(side=1,line=1.4,las=0,"Age err (%)")
-    mtext(side=2,line=1.9,las=0,"Ice divide thickness (dimensionless)")
+    par(new=TRUE,plt=c(0.65,0.95,0.1,0.9),xaxs="i",yaxs="i")
+    plot(xlim1,ylim,type="n",ann=FALSE,axes=FALSE)
+    mtext(side=1,line=1.4,las=0,"Age err (a)")
     axis(1,at=x.at1)
     axis(2,at=y.at)
     abline(v=x.at1,h=y.at,lwd=1,lty=2,col="lightgrey")
 
-    abline(v=0,lwd=4,col=1)
-    # points(abs(trcmax$age_err),trcmax$z/max(rh$H),col=2,cex=0.8)
-    lines(abs(trc$age_err_p),trc$z/max(rh$H),col=2,lwd=2)
+    lines(trc$age_err*1e3,trc$z/max(rh$H),col=1,lwd=2)
 
     box() 
 
+    par(new=TRUE,plt=c(0.65,0.95,0.1,0.9),xaxs="i",yaxs="i")
+    plot(xlim2,ylim,type="n",ann=FALSE,axes=FALSE,log="x")
+    mtext(side=3,line=1.4,las=0,"Age err (%)",col=2,cex=0.8)
+    axis(3,at=x.at2,col=2,col.axis=2,col.lab=2,cex.axis=0.8,cex.lab=0.8)
+
+    lines(abs(trc$age_err_p),trc$z/max(rh$H),col=2,lwd=1.5)
+
+    
     graphics.off()
 
 }
