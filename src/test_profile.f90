@@ -10,7 +10,7 @@ program tracertest
     implicit none 
 
     type(tracer_class) :: trc1
-    character(len=128) :: fldr 
+    character(len=128) :: fldr, prefix, filename_nml 
 
     type profile_class 
         integer :: nx, nz
@@ -31,22 +31,24 @@ program tracertest
     logical             :: dep_now 
     real(prec)          :: dt_dep 
 
-    call calc_profile_RH2003(prof1,"RH2003.nml")
-    call profile_write(prof1,fldr="output",filename="profile_RH2003.nc")
+    prefix       = "RH2003_analytic"
+    fldr         = "output/"//trim(prefix)
+    filename_nml = trim(prefix)//".nml"
 
-    fldr     = "output"
-    
+    call calc_profile_RH2003(prof1,filename_nml)
+    call profile_write(prof1,fldr=fldr,filename="profile_RH2003.nc")
+
     ! Test tracer_update
     time_start = -160000.0 
     time_end   = 0.0
-    dt         = 5.0 
+    dt         = 1.0 
 
     ! Initialize tracer and output file 
-    call tracer2D_init(trc1,"RH2003.nml",time=time,x=prof1%xc,is_sigma=.TRUE.)
+    call tracer2D_init(trc1,filename_nml,time=real(time,prec_time),x=prof1%xc,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,prof1%filename)
 
-    dt_write = 100.0 
-    dt_dep   = 250.0 
+    dt_write = 200.0 
+    dt_dep   = 500.0 
 
     dt_write_now = 0.0 
 
@@ -57,13 +59,13 @@ program tracertest
         dep_now  = .FALSE.
         if (mod(time,dt_dep) .eq. 0.0) dep_now = .TRUE. 
 
-        call tracer2D_update(trc1,time=time, &
+        call tracer2D_update(trc1,time=real(time,prec_time), &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
                              ux=prof1%ux,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
 
         if (k .gt. 1) dt_write_now = dt_write_now+dt 
         if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
-            call tracer2D_write(trc1,time,fldr,prof1%filename)
+            call tracer2D_write(trc1,real(time,prec_time),fldr,prof1%filename)
             dt_write_now = 0.0 
             write(*,*) "time = ", time, trc1%par%dt, trc1%par%n_active
         end if 
@@ -97,6 +99,7 @@ contains
         ! Loaded parameters
         integer :: nx, nz 
         real(prec) :: L, G, B 
+        real(prec) :: ux_fac 
 
         ! Local variables 
         integer :: i, j 
@@ -110,6 +113,7 @@ contains
         call nml_read(filename,"rh_par","L", L)
         call nml_read(filename,"rh_par","G", G)
         call nml_read(filename,"rh_par","B", B)
+        call nml_read(filename,"rh_par","ux_fac", ux_fac)
         
         M = G - B  
 
@@ -163,15 +167,14 @@ contains
 
                 prof%ux(i,j) = -(2.0*A)/(ng+1.0)*(rho*gg)**ng * dHdx**(ng-1.0) &
                   * dHdx * (H**(ng+1.0)-(H-prof%sigma(j)*H)**(ng+1.0))
-                prof%ux(i,j) = 0.0
+                prof%ux(i,j) = prof%ux(i,j)*ux_fac   ! Sets ux=0 for analytic solution at summit
                 prof%uz(i,j) = prof%sigma(j)*(-G+B+prof%ux(i,j)*dHdx) - B
 
-                
             end do 
         end do 
 
         ! Calculate analytical age at the divide
-        prof%age    = (H0/G)*log(prof%sigma)
+        prof%age    = -(H0/G)*log(prof%sigma)
         
 !         ! Write summary 
 !         write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 

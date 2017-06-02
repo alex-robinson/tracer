@@ -30,7 +30,7 @@ contains
         character(len=*),     intent(IN)  :: filename 
         real(prec), intent(IN) :: x(:)
         logical,    intent(IN) :: is_sigma 
-        real(prec) :: time 
+        real(prec_time) :: time 
 
         real(prec) :: y(5) 
 
@@ -50,7 +50,7 @@ contains
         implicit none 
 
         type(tracer_class), intent(INOUT) :: trc 
-        real(prec), intent(IN) :: time 
+        real(prec_time), intent(IN) :: time 
         real(prec), intent(IN) :: x(:), z(:)
         real(prec), intent(IN) :: z_srf(:), H(:)
         real(prec), intent(IN) :: ux(:,:), uz(:,:)
@@ -129,7 +129,7 @@ contains
         ! Create output file 
         call nc_create(path_out)
         call nc_write_dim(path_out,"pt",x=1,dx=1,nx=trc%par%n)
-        call nc_write_dim(path_out,"time",x=mv,unlimited=.TRUE.)
+        call nc_write_dim(path_out,"time",x=real(mv,prec_wrt),unlimited=.TRUE.)
 
         return 
 
@@ -139,19 +139,23 @@ contains
 
         implicit none 
 
-        type(tracer_class), intent(IN) :: trc 
-        real(prec) :: time 
-        character(len=*), intent(IN)   :: fldr, filename 
+        type(tracer_class), intent(INOUT) :: trc 
+        real(prec_time) :: time 
+        character(len=*), intent(IN) :: fldr, filename 
 
         ! Local variables 
         integer :: nt
         integer, allocatable :: dims(:)
-        real(prec) :: time_in  
+        real(prec_wrt) :: time_in, mv_wrt 
         character(len=512) :: path_out 
 
-        real(prec) :: tmp(size(trc%now%x))
+        real(prec_wrt) :: tmp(size(trc%now%x))
+
+        trc%par%time_write = time 
 
         path_out = trim(fldr)//"/"//trim(filename)
+
+        mv_wrt = MV 
 
         ! Determine which timestep this is
         call nc_dims(path_out,"time",dims=dims)
@@ -159,48 +163,48 @@ contains
         call nc_read(path_out,"time",time_in,start=[nt],count=[1])
         if (time_in .ne. MV .and. abs(time-time_in).gt.1e-2) nt = nt+1 
 
-        call nc_write(path_out,"time",time,dim1="time",start=[nt],count=[1],missing_value=MV)
+        call nc_write(path_out,"time",real(time,prec_wrt),dim1="time",start=[nt],count=[1],missing_value=mv_wrt)
         
         tmp = trc%now%x
-        where(trc%now%x .ne. MV) tmp = trc%now%x*1e-3
-        call nc_write(path_out,"x",tmp,dim1="pt",dim2="time", missing_value=MV, &
+        where(trc%now%x .ne. mv_wrt) tmp = trc%now%x*1e-3
+        call nc_write(path_out,"x",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
-        call nc_write(path_out,"z",real(trc%now%z,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"z",real(trc%now%z,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"dpth",trc%now%dpth,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"dpth",real(trc%now%dpth,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"z_srf",trc%now%z_srf,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"z_srf",real(trc%now%z_srf,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"ux",real(trc%now%ux,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"ux",real(trc%now%ux,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"uz",real(trc%now%uz,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"uz",real(trc%now%uz,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"thk",trc%now%thk,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"thk",real(trc%now%thk,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"T",trc%now%T,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"T",real(trc%now%T,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1])
-        call nc_write(path_out,"H",trc%now%H,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"H",real(trc%now%H,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
 
-        call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(MV), &
+        call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(mv_wrt), &
                         start=[1,nt],count=[trc%par%n ,1])
 
-        tmp = MV
-        where(trc%now%x .ne. MV) tmp = time - trc%dep%time 
-        call nc_write(path_out,"age",tmp,dim1="pt",dim2="time", missing_value=MV, &
+        tmp = mv_wrt
+        where(trc%now%x .ne. mv_wrt) tmp = time - trc%dep%time 
+        call nc_write(path_out,"age",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="a")
         
         ! Write deposition information
-        call nc_write(path_out,"dep_time",trc%dep%time,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"dep_time",real(trc%dep%time,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1])
-        call nc_write(path_out,"dep_H",trc%dep%H,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"dep_H",real(trc%dep%H,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
 
         tmp = trc%dep%x
-        where(trc%dep%x .ne. MV) tmp = trc%dep%x*1e-3
-        call nc_write(path_out,"dep_x",tmp,dim1="pt",dim2="time", missing_value=MV, &
+        where(trc%dep%x .ne. mv_wrt) tmp = trc%dep%x*1e-3
+        call nc_write(path_out,"dep_x",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
-        call nc_write(path_out,"dep_z",trc%dep%z,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"dep_z",real(trc%dep%z,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
 
 
@@ -213,16 +217,19 @@ contains
         implicit none 
 
         type(tracer_class), intent(IN) :: trc 
-        real(prec) :: time
+        real(prec_time) :: time
         character(len=*), intent(IN)   :: fldr, filename 
 !         real(prec),         intent(IN) :: z_srf(:), H(:) 
 
         ! Local variables 
         integer :: nt 
         character(len=512) :: path_out 
+        real(prec_wrt) :: mv_wrt 
 
         path_out = trim(fldr)//"/"//trim(filename)
 
+        mv_wrt = MV 
+        
         ! Create output file 
         call nc_create(path_out)
         call nc_write_dim(path_out,"xc",        x=trc%stats%x*1e-3,     units="km")
@@ -230,22 +237,22 @@ contains
         call nc_write_dim(path_out,"age_iso",   x=trc%stats%age_iso,    units="ka")
         call nc_write_dim(path_out,"time",      x=time,unlimited=.TRUE.,units="ka")
         
-!         call nc_write(path_out,"z_srf",z_srf,dim1="xc",missing_value=MV, &
+!         call nc_write(path_out,"z_srf",z_srf,dim1="xc",missing_value=mv_wrt, &
 !                       units="m",long_name="Surface elevation")
-!         call nc_write(path_out,"H",H,dim1="xc",missing_value=MV, &
+!         call nc_write(path_out,"H",H,dim1="xc",missing_value=mv_wrt, &
 !                       units="m",long_name="Ice thickness")
 
-        call nc_write(path_out,"ice_age",trc%stats%ice_age(:,1,:),dim1="xc",dim2="depth_norm",missing_value=MV, &
+        call nc_write(path_out,"ice_age",trc%stats%ice_age(:,1,:),dim1="xc",dim2="depth_norm",missing_value=mv_wrt, &
                       units="ka",long_name="Layer age")
-        call nc_write(path_out,"ice_age_err",trc%stats%ice_age_err(:,1,:),dim1="xc",dim2="depth_norm",missing_value=MV, &
+        call nc_write(path_out,"ice_age_err",trc%stats%ice_age_err(:,1,:),dim1="xc",dim2="depth_norm",missing_value=mv_wrt, &
                       units="ka",long_name="Layer age - error")
 
-        call nc_write(path_out,"depth_iso",trc%stats%depth_iso(:,1,:),dim1="xc",dim2="age_iso",missing_value=MV, &
+        call nc_write(path_out,"depth_iso",trc%stats%depth_iso(:,1,:),dim1="xc",dim2="age_iso",missing_value=mv_wrt, &
                       units="ka",long_name="Isochrone depth")
-        call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err(:,1,:),dim1="xc",dim2="age_iso",missing_value=MV, &
+        call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err(:,1,:),dim1="xc",dim2="age_iso",missing_value=mv_wrt, &
                       units="ka",long_name="Isochrone depth - error")
         
-        call nc_write(path_out,"density",trc%stats%density(:,1,:),dim1="xc",dim2="depth_norm",missing_value=int(MV), &
+        call nc_write(path_out,"density",trc%stats%density(:,1,:),dim1="xc",dim2="depth_norm",missing_value=int(mv_wrt), &
                       units="1",long_name="Tracer density")
         
         return 

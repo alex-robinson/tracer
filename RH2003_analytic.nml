@@ -1,17 +1,17 @@
 
 &tracer_par
-    n         = 15000
-    n_max_dep = 100
+    n         = 1
+    n_max_dep = 1
     
     thk_min   = 1e-2            ! m (minimum thickness of tracer 'layer')
-    H_min     = 100.0           ! m 
+    H_min     = 3400.0          ! m 
     depth_max = 0.99            ! fraction of thickness
     U_max     = 200.0           ! m/a 
     
-    H_min_dep = 2000.0          ! m 
+    H_min_dep = 3595.0          ! m 
     alpha     = 1.0 
-    weight    = "rand"          ! linear, quadratic, rand
-    noise     = True 
+    dist      = "linear"
+    noise     = False 
 
     dens_z_lim = 50.0           ! m
     dens_max   = 10             ! Number of points
@@ -26,6 +26,6 @@
     L   = 1e6         ! [m] Length 
     G   = 0.1         ! [m/a] Accumulation rate 
     B   = 0.0         ! [m/a] Basal melt rate  
-    ux_fac = 1.0      ! Scale ux to turn it on (1.0) or off (0.0 - for the analytic case)
+    ux_fac = 0.0      ! Scale ux to turn it on (1.0) or off (0.0 - for the analytic case)
 
 /

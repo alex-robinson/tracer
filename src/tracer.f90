@@ -13,16 +13,16 @@ module tracer
     type tracer_par_class 
         integer :: n, n_active, n_max_dep, id_max 
         logical :: is_sigma                     ! Is the defined z-axis in sigma coords
-        real(prec) :: time_now, time_old
-        real(prec_hi) :: dt
-        real(prec) :: time_dep, time_write 
+        real(prec_time) :: time_now, time_old
+        real(prec_time) :: time_dep, time_write 
+        real(prec_time) :: dt
         real(prec) :: thk_min                   ! Minimum thickness of tracer (m)
         real(prec) :: H_min                     ! Minimum ice thickness to track (m)
         real(prec) :: depth_max                 ! Maximum depth of tracer (fraction)
         real(prec) :: U_max                     ! Maximum horizontal velocity of tracer to track (m/a)
         real(prec) :: H_min_dep                 ! Minimum ice thickness for tracer deposition (m)
         real(prec) :: alpha                     ! Slope of probability function
-        character(len=56) :: dist               ! Distribution for generating prob. function
+        character(len=56) :: weight             ! Weighting function for generating prob. distribution
         logical    :: noise                     ! Add noise to gridded deposition location
         real(prec) :: dens_z_lim                ! Distance from surface to count density
         integer    :: dens_max                  ! Max allowed density of particles at surface
@@ -32,9 +32,9 @@ module tracer
 
     type tracer_state_class 
         integer, allocatable :: active(:), id(:)
-        real(prec_hi), allocatable :: x(:), y(:), z(:), sigma(:)
-        real(prec_hi), allocatable :: ux(:), uy(:), uz(:)
-        real(prec_hi), allocatable :: ax(:), ay(:), az(:)
+        real(prec), allocatable :: x(:), y(:), z(:), sigma(:)
+        real(prec), allocatable :: ux(:), uy(:), uz(:)
+        real(prec), allocatable :: ax(:), ay(:), az(:)
         real(prec), allocatable :: dpth(:), z_srf(:)
         real(prec), allocatable :: thk(:)            ! Tracer thickness (for compression)
         real(prec), allocatable :: T(:)              ! Current temperature of the tracer (for borehole comparison, internal melting...)
@@ -43,20 +43,22 @@ module tracer
     end type 
 
     type tracer_stats_class
-        real(prec), allocatable :: x(:), y(:)
-        real(prec), allocatable :: depth_norm(:)
-        real(prec), allocatable :: age_iso(:) 
+        ! All stats variable at precision of writing (prec_wrt), since
+        ! this should not need high precision output 
 
-        real(prec), allocatable :: depth_iso(:,:,:)
-        real(prec), allocatable :: depth_iso_err(:,:,:)
-        real(prec), allocatable :: dep_z_iso(:,:,:)
+        real(prec_wrt), allocatable :: x(:), y(:)
+        real(prec_wrt), allocatable :: depth_norm(:)
+        real(prec_wrt), allocatable :: age_iso(:) 
+
+        real(prec_wrt), allocatable :: depth_iso(:,:,:)
+        real(prec_wrt), allocatable :: depth_iso_err(:,:,:)
+        real(prec_wrt), allocatable :: dep_z_iso(:,:,:)
         integer,    allocatable :: density_iso(:,:,:)
         
-        real(prec), allocatable :: ice_age(:,:,:)
-        real(prec), allocatable :: ice_age_err(:,:,:)
+        real(prec_wrt), allocatable :: ice_age(:,:,:)
+        real(prec_wrt), allocatable :: ice_age_err(:,:,:)
         integer,    allocatable :: density(:,:,:)
-        
-        
+           
     end type
 
     type tracer_dep_class 
@@ -117,7 +119,7 @@ contains
         character(len=*),     intent(IN)  :: filename 
         real(prec), intent(IN) :: x(:), y(:)
         logical,    intent(IN) :: is_sigma  
-        real(prec), intent(IN) :: time 
+        real(prec_time), intent(IN) :: time 
 
         ! Local variables 
         integer :: i 
@@ -184,7 +186,7 @@ contains
         implicit none 
 
         type(tracer_class), intent(INOUT) :: trc 
-        real(prec), intent(IN) :: time 
+        real(prec_time), intent(IN) :: time 
         real(prec), intent(IN) :: x(:), y(:), z(:)
         real(prec), intent(IN) :: z_srf(:,:), H(:,:)
         real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
@@ -196,13 +198,13 @@ contains
         character(len=3) :: idx_order 
         integer    :: i, j, k, nx, ny, nz
         logical    :: rev_z 
-        real(prec_hi), allocatable :: x1(:), y1(:), z1(:)
-        real(prec_hi), allocatable :: zc(:)   ! Actual cartesian z-axis after applying sigma*H 
-        real(prec_hi), allocatable :: z_srf1(:,:), H1(:,:)
-        real(prec_hi), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
-        real(prec_hi), allocatable :: usig1(:,:,:)
-        real(prec_hi) :: ux0, uy0, uz0 
-        real(prec_hi) :: dt 
+        real(prec), allocatable :: x1(:), y1(:), z1(:)
+        real(prec), allocatable :: zc(:)   ! Actual cartesian z-axis after applying sigma*H 
+        real(prec), allocatable :: z_srf1(:,:), H1(:,:)
+        real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
+        real(prec), allocatable :: usig1(:,:,:)
+        real(prec) :: ux0, uy0, uz0 
+        real(prec) :: dt 
 
         ! Update current time and time step
         trc%par%time_old = trc%par%time_now 
@@ -442,8 +444,8 @@ contains
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
-        real(prec_hi), intent(IN) :: x(:), y(:)
-        real(prec_hi), intent(IN) :: H(:,:)
+        real(prec), intent(IN) :: x(:), y(:)
+        real(prec), intent(IN) :: H(:,:)
         integer, intent(IN) :: nmax  
 
         integer :: ntot  
@@ -456,7 +458,7 @@ contains
         ntot = min(nmax,count(now%active == 0))
 
         ! Determine initial desired distribution of points on low resolution grid
-        p_init = gen_distribution(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%dist)
+        p_init = gen_distribution(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%weight)
         p = p_init  
 
         ! Generate random numbers to populate points 
@@ -538,8 +540,8 @@ contains
 
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
-        real(prec_hi), intent(IN) :: x(:), y(:) 
-        real(prec_hi), intent(IN) :: Hmax 
+        real(prec), intent(IN) :: x(:), y(:) 
+        real(prec), intent(IN) :: Hmax 
 
         ! Deactivate points where:
         !  - Thickness of ice sheet at point's location is below threshold
@@ -587,11 +589,11 @@ contains
 
         implicit none 
 
-        real(prec_hi), intent(INOUT) :: x, y, z 
-        real(prec_hi), intent(IN)    :: ux, uy, uz 
-        real(prec_hi), intent(IN)    :: ax, ay, az 
-        real(prec_hi), intent(IN)    :: dt 
-        integer,       intent(IN)    :: active 
+        real(prec),   intent(INOUT) :: x, y, z 
+        real(prec),   intent(IN)    :: ux, uy, uz 
+        real(prec),   intent(IN)    :: ax, ay, az 
+        real(prec_time), intent(IN)    :: dt 
+        integer,         intent(IN)    :: active 
 
         if (active .gt. 0) then 
 
@@ -609,7 +611,7 @@ contains
 
         implicit none 
 
-        real(prec_hi), intent(IN) :: H(:,:)
+        real(prec), intent(IN) :: H(:,:)
         real(prec), intent(IN) :: H_min, alpha 
         character(len=*), intent(IN) :: dist 
         real(prec) :: p(size(H,1),size(H,2))
@@ -628,10 +630,10 @@ contains
 
                 p = (alpha * max(H-H_min,0.0) / (maxval(H)-H_min))**2
 
-            case DEFAULT
+            case DEFAULT   ! "rand"
 
-                ! Even distribution (all points equally likely)
-                p = 1.0
+                ! Random even distribution (all points equally likely)
+                call random_number(p)
                 where (H .lt. H_min) p = 0.0 
 
 
@@ -700,11 +702,11 @@ contains
                 if (n_ind .gt. 0) then
                     write(*,*) "isochrones: ", i, j, q, n_ind 
  
-                    trc%stats%depth_iso(i,j,q)     = calc_mean(trc%now%dpth(inds))
-                    trc%stats%depth_iso_err(i,j,q) = calc_sd(trc%now%dpth(inds),trc%stats%depth_iso(i,j,q))
+                    trc%stats%depth_iso(i,j,q)     = calc_mean(real(trc%now%dpth(inds),prec_wrt))
+                    trc%stats%depth_iso_err(i,j,q) = calc_sd(real(trc%now%dpth(inds),prec_wrt),trc%stats%depth_iso(i,j,q))
                     trc%stats%density_iso(i,j,q)   = n_ind 
 
-                    trc%stats%dep_z_iso(i,j,q)     = calc_mean(trc%dep%z(inds))
+                    trc%stats%dep_z_iso(i,j,q)     = calc_mean(real(trc%dep%z(inds),prec_wrt))
                 else 
                     trc%stats%depth_iso(i,j,q)     = MV 
                     trc%stats%depth_iso_err(i,j,q) = MV
@@ -735,8 +737,8 @@ contains
                 if (n_ind .gt. 0) then
                     write(*,*) "ice_ages: ", i, j, q, n_ind 
  
-                    trc%stats%ice_age(i,j,q)     = calc_mean(0.0-trc%dep%time(inds))*1e-3
-                    trc%stats%ice_age_err(i,j,q) = calc_sd(0.0-trc%dep%time(inds),trc%stats%ice_age(i,j,q))*1e-3
+                    trc%stats%ice_age(i,j,q)     = calc_mean(real(0.0-trc%dep%time(inds),prec_wrt))*1e-3
+                    trc%stats%ice_age_err(i,j,q) = calc_sd(real(0.0-trc%dep%time(inds),prec_wrt),trc%stats%ice_age(i,j,q))*1e-3
                     trc%stats%density(i,j,q)     = n_ind 
                 else 
                     trc%stats%ice_age(i,j,q)     = MV 
@@ -757,8 +759,8 @@ contains
 
         implicit none 
 
-        real(prec), intent(IN) :: x(:) 
-        real(prec) :: mean 
+        real(prec_wrt), intent(IN) :: x(:) 
+        real(prec_wrt) :: mean 
         integer :: n 
 
         n = count(x.ne.MV)
@@ -777,9 +779,9 @@ contains
 
         implicit none 
 
-        real(prec), intent(IN) :: x(:) 
-        real(prec) :: mean 
-        real(prec) :: stdev 
+        real(prec_wrt), intent(IN) :: x(:) 
+        real(prec_wrt) :: mean 
+        real(prec_wrt) :: stdev 
         integer :: n 
 
         n = count(x.ne.MV)
@@ -818,7 +820,7 @@ contains
 
 !         par%H_min_dep = 1000.0 ! m 
 !         par%alpha     = 1.0 
-!         par%dist      = "linear"
+!         par%weight    = "linear"
         
 !         par%dens_z_lim = 50.0 ! m
 !         par%dens_max   = 10   ! Number of points
@@ -831,7 +833,7 @@ contains
         call nml_read(filename,"tracer_par","U_max",        par%U_max)
         call nml_read(filename,"tracer_par","H_min_dep",    par%H_min_dep)
         call nml_read(filename,"tracer_par","alpha",        par%alpha)
-        call nml_read(filename,"tracer_par","dist",         par%dist)
+        call nml_read(filename,"tracer_par","weight",       par%weight)
         call nml_read(filename,"tracer_par","noise",        par%noise)
         call nml_read(filename,"tracer_par","dens_z_lim",   par%dens_z_lim)
         call nml_read(filename,"tracer_par","dens_max",     par%dens_max)
@@ -1000,7 +1002,7 @@ contains
         implicit none 
      
         real(prec),    intent(IN) :: var(:)
-        real(prec_hi), intent(INOUT), allocatable :: var1(:)
+        real(prec), intent(INOUT), allocatable :: var1(:)
         logical,    intent(IN) :: rev 
 
         integer :: i, nx
@@ -1027,7 +1029,7 @@ contains
 
         character(len=3), intent(IN) :: idx_order 
         real(prec),    intent(IN) :: var(:,:)
-        real(prec_hi), intent(INOUT), allocatable :: var1(:,:)
+        real(prec), intent(INOUT), allocatable :: var1(:,:)
         integer :: i, j
         integer :: nx, ny
 
@@ -1077,7 +1079,7 @@ contains
 
         character(len=3), intent(IN) :: idx_order 
         real(prec),    intent(IN) :: var(:,:,:)
-        real(prec_hi), intent(INOUT), allocatable :: var1(:,:,:)
+        real(prec), intent(INOUT), allocatable :: var1(:,:,:)
         logical,    intent(IN) :: rev_z   ! Reverse the z-axis? 
         integer :: i, j, k
         integer :: nx, ny, nz 
@@ -1166,7 +1168,7 @@ contains
         ! Create output file 
         call nc_create(path_out)
         call nc_write_dim(path_out,"pt",x=1,dx=1,nx=trc%par%n)
-        call nc_write_dim(path_out,"time",x=mv,unlimited=.TRUE.)
+        call nc_write_dim(path_out,"time",x=real(mv,prec_wrt),unlimited=.TRUE.)
 
         return 
 
@@ -1177,20 +1179,21 @@ contains
         implicit none 
 
         type(tracer_class), intent(INOUT) :: trc 
-        real(prec) :: time 
-        character(len=*), intent(IN)   :: fldr, filename 
+        real(prec_time) :: time 
+        character(len=*), intent(IN) :: fldr, filename 
 
         ! Local variables 
         integer :: nt
         integer, allocatable :: dims(:)
-        real(prec) :: time_in  
+        real(prec_wrt) :: time_in, mv_wrt   
+        real(prec_wrt) :: tmp(size(trc%now%x))
         character(len=512) :: path_out 
-
-        real(prec) :: tmp(size(trc%now%x))
 
         trc%par%time_write = time 
 
         path_out = trim(fldr)//"/"//trim(filename)
+
+        mv_wrt = MV 
 
         ! Determine which timestep this is
         call nc_dims(path_out,"time",dims=dims)
@@ -1198,58 +1201,58 @@ contains
         call nc_read(path_out,"time",time_in,start=[nt],count=[1])
         if (time_in .ne. MV .and. abs(time-time_in).gt.1e-2) nt = nt+1 
 
-        call nc_write(path_out,"time",time,dim1="time",start=[nt],count=[1],missing_value=MV)
-        call nc_write(path_out,"n_active",trc%par%n_active,dim1="time",start=[nt],count=[1],missing_value=int(MV))
+        call nc_write(path_out,"time",real(time,prec_wrt), dim1="time",start=[nt],count=[1],missing_value=mv_wrt)
+        call nc_write(path_out,"n_active",trc%par%n_active,dim1="time",start=[nt],count=[1],missing_value=int(mv_wrt))
         
         tmp = trc%now%x
-        where(trc%now%x .ne. MV) tmp = trc%now%x*1e-3
-        call nc_write(path_out,"x",tmp,dim1="pt",dim2="time", missing_value=MV, &
+        where(trc%now%x .ne. mv_wrt) tmp = trc%now%x*1e-3
+        call nc_write(path_out,"x",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
         tmp = trc%now%y
-        where(trc%now%y .ne. MV) tmp = trc%now%y*1e-3
-        call nc_write(path_out,"y",tmp,dim1="pt",dim2="time", missing_value=MV, &
+        where(trc%now%y .ne. mv_wrt) tmp = trc%now%y*1e-3
+        call nc_write(path_out,"y",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
-        call nc_write(path_out,"z",real(trc%now%z,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"z",real(trc%now%z,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"dpth",trc%now%dpth,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"dpth",real(trc%now%dpth,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"z_srf",trc%now%z_srf,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"z_srf",real(trc%now%z_srf,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"ux",real(trc%now%ux,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"ux",real(trc%now%ux,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"uy",real(trc%now%uy,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"uy",real(trc%now%uy,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"uz",real(trc%now%uz,kind=prec),dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"uz",real(trc%now%uz,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"thk",trc%now%thk,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"thk",real(trc%now%thk,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"T",trc%now%T,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"T",real(trc%now%T,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1])
-        call nc_write(path_out,"H",trc%now%H,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"H",real(trc%now%H,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
 
-        call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(MV), &
+        call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(mv_wrt), &
                         start=[1,nt],count=[trc%par%n ,1])
 
-        tmp = MV
-        where(trc%dep%time .ne. MV) tmp = time-trc%dep%time
-        call nc_write(path_out,"age",tmp,dim1="pt",dim2="time", missing_value=MV, &
+        tmp = mv_wrt
+        where(trc%dep%time .ne. mv_wrt) tmp = time-trc%dep%time
+        call nc_write(path_out,"age",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="a")
 
         ! Write deposition information
-        call nc_write(path_out,"dep_time",trc%dep%time,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"dep_time",real(trc%dep%time,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="years")
-        call nc_write(path_out,"dep_H",trc%dep%H,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"dep_H",real(trc%dep%H,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         tmp = trc%dep%x
-        where(trc%dep%x .ne. MV) tmp = trc%dep%x*1e-3
-        call nc_write(path_out,"dep_x",tmp,dim1="pt",dim2="time", missing_value=MV, &
+        where(trc%dep%x .ne. mv_wrt) tmp = trc%dep%x*1e-3
+        call nc_write(path_out,"dep_x",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
         tmp = trc%dep%y
-        where(trc%dep%y .ne. MV) tmp = trc%dep%y*1e-3
-        call nc_write(path_out,"dep_y",tmp,dim1="pt",dim2="time", missing_value=MV, &
+        where(trc%dep%y .ne. mv_wrt) tmp = trc%dep%y*1e-3
+        call nc_write(path_out,"dep_y",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
-        call nc_write(path_out,"dep_z",trc%dep%z,dim1="pt",dim2="time", missing_value=MV, &
+        call nc_write(path_out,"dep_z",real(trc%dep%z,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
 
         return 
@@ -1263,14 +1266,17 @@ contains
         implicit none 
 
         type(tracer_class), intent(IN) :: trc 
-        real(prec) :: time
+        real(prec_time) :: time
         character(len=*),   intent(IN) :: fldr, filename 
 !         real(prec),         intent(IN) :: z_srf(:,:), H(:,:) 
 
         ! Local variables 
         character(len=512) :: path_out 
+        real(prec_wrt) :: mv_wrt 
 
         path_out = trim(fldr)//"/"//trim(filename)
+
+        mv_wrt = MV 
 
         ! Create output file 
         call nc_create(path_out)
@@ -1280,25 +1286,25 @@ contains
         call nc_write_dim(path_out,"age_iso",   x=trc%stats%age_iso,    units="ka")
         call nc_write_dim(path_out,"time",      x=time,unlimited=.TRUE.,units="ka")
         
-!         call nc_write(path_out,"z_srf",z_srf,dim1="xc",dim2="yc",missing_value=MV, &
+!         call nc_write(path_out,"z_srf",z_srf,dim1="xc",dim2="yc",missing_value=mv_wrt, &
 !                       units="m",long_name="Surface elevation")
-!         call nc_write(path_out,"H",H,dim1="xc",dim2="yc",missing_value=MV, &
+!         call nc_write(path_out,"H",H,dim1="xc",dim2="yc",missing_value=mv_wrt, &
 !                       units="m",long_name="Ice thickness")
 
-        call nc_write(path_out,"ice_age",trc%stats%ice_age,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=MV, &
+        call nc_write(path_out,"ice_age",trc%stats%ice_age,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=mv_wrt, &
                       units="ka",long_name="Layer age")
-        call nc_write(path_out,"ice_age_err",trc%stats%ice_age_err,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=MV, &
+        call nc_write(path_out,"ice_age_err",trc%stats%ice_age_err,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=mv_wrt, &
                       units="ka",long_name="Layer age - error")
-        call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=int(MV), &
+        call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=int(mv_wrt), &
                       units="1",long_name="Tracer density")
 
-        call nc_write(path_out,"depth_iso",trc%stats%depth_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
+        call nc_write(path_out,"depth_iso",trc%stats%depth_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=mv_wrt, &
                       units="m",long_name="Isochrone depth")
-        call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
+        call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err,dim1="xc",dim2="yc",dim3="age_iso",missing_value=mv_wrt, &
                       units="m",long_name="Isochrone depth - error")
-        call nc_write(path_out,"dep_z_iso",trc%stats%dep_z_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=MV, &
+        call nc_write(path_out,"dep_z_iso",trc%stats%dep_z_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=mv_wrt, &
                       units="m",long_name="Isochrone deposition elevation")
-        call nc_write(path_out,"density_iso",trc%stats%density_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=int(MV), &
+        call nc_write(path_out,"density_iso",trc%stats%density_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=int(mv_wrt), &
                       units="1",long_name="Tracer density (for isochrones)")
 
         

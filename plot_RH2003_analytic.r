@@ -119,7 +119,7 @@ load_tracer_profile = function(filename,rh)
 # Load data 
 if (TRUE) {
 
-    fldr = "output/RH2003"
+    fldr = "output/RH2003_analytic"
 
     rh = calc_profile_RH2003()
     rh$age = rh$age*1e-3 
@@ -128,7 +128,7 @@ if (TRUE) {
     rh0$age = rh0$age*1e-3 
 
     trc_dp = load_tracer_profile(file.path(fldr,"RH2003_51_2_0.10_0.00_dp.nc"),rh=rh)
-    # trc_sp = load_tracer_profile(file.path(fldr,"RH2003_51_2_0.10_0.00_sp.nc"),rh=rh)
+    trc_sp = load_tracer_profile(file.path(fldr,"RH2003_51_2_0.10_0.00_sp.nc"),rh=rh)
     
 }
 
@@ -136,7 +136,7 @@ ptype = "png"
 colax = "grey40"
 
 # Plot comparison at dome
-if (FALSE) {
+if (TRUE) {
 
     ylim  = c(-0.01,1.02)
     y.at  = seq(0,1,by=0.1)

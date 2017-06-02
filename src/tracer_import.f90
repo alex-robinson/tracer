@@ -32,10 +32,10 @@ contains
         ! Local variables  
         character(len=3) :: idx_order 
         integer :: nx, ny, nz 
-        real(prec_hi), allocatable :: x1(:), y1(:), z1(:)
-        real(prec_hi), allocatable :: z_srf1(:,:), H1(:,:)
-        real(prec_hi), allocatable :: age1(:,:,:) 
-        real(prec_hi) :: zc(size(z))
+        real(prec), allocatable :: x1(:), y1(:), z1(:)
+        real(prec), allocatable :: z_srf1(:,:), H1(:,:)
+        real(prec), allocatable :: age1(:,:,:) 
+        real(prec) :: zc(size(z))
         logical :: rev_z 
 
         ! Determine order of indices (default ijk)

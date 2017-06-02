@@ -6,8 +6,9 @@ module tracer_precision
     integer,  parameter :: dp  = kind(1.d0)
 
     ! Precision used here
-    integer,  parameter :: prec    = sp 
-    integer,  parameter :: prec_hi = dp 
+    integer,  parameter :: prec      = sp 
+    integer,  parameter :: prec_time = sp 
+    integer,  parameter :: prec_wrt  = sp 
 
     ! Missing value aliases 
     real(prec), parameter :: MISSING_VALUE_DEFAULT = -9999.0_dp 
