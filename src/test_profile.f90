@@ -31,7 +31,7 @@ program tracertest
     logical             :: dep_now 
     real(prec)          :: dt_dep 
 
-    prefix       = "RH2003"
+    prefix       = "RH2003_analytic"
     fldr         = "output/"//trim(prefix)
     filename_nml = trim(prefix)//".nml"
 
@@ -50,7 +50,7 @@ program tracertest
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,filename_nml,time=real(time,prec_time),x=prof1%xc,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,prof1%filename)
-    
+
     dt_write_now = 0.0 
 
     do k = 1, int((time_end-time_start)/dt)+1 
@@ -59,6 +59,15 @@ program tracertest
 
         dep_now  = .FALSE.
         if (mod(time,dt_dep) .eq. 0.0) dep_now = .TRUE. 
+
+        if (maxval(prof1%ux) .gt. 0.0) then 
+            ! Calculating full 2D profile, so increase writing output for younger ages
+
+            if (time .ge. -12.0d3) dt_write = 200.d0 
+            if (time .ge.  -8.0d3) dt_write = 100.d0    
+            if (time .ge.  -2.0d3) dt_write =  50.d0    
+
+        end if
 
         call tracer2D_update(trc1,time=real(time,prec_time), &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &

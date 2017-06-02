@@ -3,7 +3,7 @@ library(myr)
 source("functions_tracers.r")
 
 # Load data 
-if (FALSE) {
+if (TRUE) {
 
     fldr = "output/RH2003_analytic"
 
@@ -54,6 +54,9 @@ if (TRUE) {
 
     lines(-trc_dp_1.0$rh_age,trc_dp_1.0$sigma,col="grey20",lwd=5)
     lines(-trc_dp_1.0$age,   trc_dp_1.0$sigma,col=colnow,lwd=1.5,lty=1)
+    
+    kk = which(trc_sp_10.0$id==1)
+    lines(-trc_sp_10.0$age[kk],   trc_sp_10.0$sigma[kk],col=5,lwd=1.5,lty=1)
     
     legend("topleft",bty="n",inset=0.01,col=c("grey20",colnow),lwd=c(5,1.5),lty=c(1,1),
         c("Analytical solution","Lagrangian tracer"),cex=0.8)

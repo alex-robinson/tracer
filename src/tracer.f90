@@ -9,7 +9,9 @@ module tracer
 
     implicit none 
 
-    
+    real(prec), parameter :: z_scale_in  = 1e0
+    real(prec), parameter :: z_scale_out = 1.0/z_scale_in
+
     type tracer_par_class 
         integer :: n, n_active, n_max_dep, id_max 
         logical :: is_sigma                     ! Is the defined z-axis in sigma coords
@@ -27,7 +29,7 @@ module tracer
         real(prec) :: dens_z_lim                ! Distance from surface to count density
         integer    :: dens_max                  ! Max allowed density of particles at surface
         
-        character(len=56) :: interp_method 
+        character(len=56) :: interp_method  
     end type 
 
     type tracer_state_class 
@@ -108,6 +110,10 @@ module tracer
     public :: tracer_end 
     public :: tracer_write_init, tracer_write 
     public :: tracer_write_stats 
+
+    ! Conversion constants
+    public :: z_scale_in 
+    public :: z_scale_out 
 
 contains 
 
@@ -266,6 +272,14 @@ contains
         ny = size(y1,1)
         nz = size(z1,1)
 
+        ! Scale z-axis as desired (for numerics)
+        if (z_scale_in .ne. 1.0) then 
+            if (.not. trc%par%is_sigma) z1 = z1*z_scale_in 
+            z_srf1 = z_srf1*z_scale_in 
+            H1     = H1*z_scale_in
+            uz1    = uz1*z_scale_in 
+        end if 
+
         if (trim(trc%par%interp_method) .eq. "spline") then
 
             ! Allocate z-velocity field in sigma coordinates 
@@ -367,7 +381,7 @@ contains
                 par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
 
                 ! Apply interpolation weights to variables
-                trc%now%dpth(i)  = 0.001   ! Always deposit just below the surface (eg 1 mm) to avoid zero z-velocity
+                trc%now%dpth(i)  = 0.001*z_scale_in   ! Always deposit just below the surface (eg 1 mm) to avoid zero z-velocity
                 trc%now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
                 trc%now%z(i)     = trc%now%z_srf(i)-trc%now%dpth(i)
                 
@@ -458,7 +472,7 @@ contains
         ntot = min(nmax,count(now%active == 0))
 
         ! Determine initial desired distribution of points on low resolution grid
-        p_init = gen_distribution(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%weight)
+        p_init = gen_distribution(H,H_min=par%H_min_dep*z_scale_in,alpha=par%alpha,dist=par%weight)
         p = p_init  
 
         ! Generate random numbers to populate points 
@@ -550,7 +564,7 @@ contains
         !  - Velocity of point is higher than maximum threshold 
         !  - x/y position is out of boundaries of the domain 
         where (now%active .gt. 0 .and. &
-              ( now%H .lt. par%H_min                           .or. &
+              ( now%H .lt. par%H_min*z_scale_in                .or. &
                 now%H .gt. Hmax                                .or. &
                 now%dpth/now%H .ge. par%depth_max              .or. &
                 sqrt(now%ux**2 + now%uy**2) .gt. par%U_max     .or. &
@@ -702,11 +716,12 @@ contains
                 if (n_ind .gt. 0) then
                     write(*,*) "isochrones: ", i, j, q, n_ind 
  
-                    trc%stats%depth_iso(i,j,q)     = calc_mean(real(trc%now%dpth(inds),prec_wrt))
-                    trc%stats%depth_iso_err(i,j,q) = calc_sd(real(trc%now%dpth(inds),prec_wrt),trc%stats%depth_iso(i,j,q))
+                    trc%stats%depth_iso(i,j,q)     = calc_mean(real(trc%now%dpth(inds)*z_scale_out,prec_wrt))
+                    trc%stats%depth_iso_err(i,j,q) = calc_sd(real(trc%now%dpth(inds)*z_scale_out,prec_wrt), &
+                                                             trc%stats%depth_iso(i,j,q))
                     trc%stats%density_iso(i,j,q)   = n_ind 
 
-                    trc%stats%dep_z_iso(i,j,q)     = calc_mean(real(trc%dep%z(inds),prec_wrt))
+                    trc%stats%dep_z_iso(i,j,q)     = calc_mean(real(trc%dep%z(inds)*z_scale_out,prec_wrt))
                 else 
                     trc%stats%depth_iso(i,j,q)     = MV 
                     trc%stats%depth_iso_err(i,j,q) = MV
@@ -1212,23 +1227,23 @@ contains
         where(trc%now%y .ne. mv_wrt) tmp = trc%now%y*1e-3
         call nc_write(path_out,"y",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
-        call nc_write(path_out,"z",real(trc%now%z,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
+        call nc_write(path_out,"z",real(trc%now%z*z_scale_out,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"dpth",real(trc%now%dpth,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
+        call nc_write(path_out,"dpth",real(trc%now%dpth*z_scale_out,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
-        call nc_write(path_out,"z_srf",real(trc%now%z_srf,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
+        call nc_write(path_out,"z_srf",real(trc%now%z_srf*z_scale_out,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"ux",real(trc%now%ux,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
         call nc_write(path_out,"uy",real(trc%now%uy,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
-        call nc_write(path_out,"uz",real(trc%now%uz,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
+        call nc_write(path_out,"uz",real(trc%now%uz*z_scale_out,kind=prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m/a")
         call nc_write(path_out,"thk",real(trc%now%thk,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         call nc_write(path_out,"T",real(trc%now%T,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1])
-        call nc_write(path_out,"H",real(trc%now%H,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
+        call nc_write(path_out,"H",real(trc%now%H*z_scale_out,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
 
         call nc_write(path_out,"id",trc%now%id,dim1="pt",dim2="time", missing_value=int(mv_wrt), &
@@ -1242,7 +1257,7 @@ contains
         ! Write deposition information
         call nc_write(path_out,"dep_time",real(trc%dep%time,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="years")
-        call nc_write(path_out,"dep_H",real(trc%dep%H,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
+        call nc_write(path_out,"dep_H",real(trc%dep%H*z_scale_out,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
         tmp = trc%dep%x
         where(trc%dep%x .ne. mv_wrt) tmp = trc%dep%x*1e-3
@@ -1252,7 +1267,7 @@ contains
         where(trc%dep%y .ne. mv_wrt) tmp = trc%dep%y*1e-3
         call nc_write(path_out,"dep_y",tmp,dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="km")
-        call nc_write(path_out,"dep_z",real(trc%dep%z,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
+        call nc_write(path_out,"dep_z",real(trc%dep%z*z_scale_out,prec_wrt),dim1="pt",dim2="time", missing_value=mv_wrt, &
                         start=[1,nt],count=[trc%par%n ,1],units="m")
 
         return 

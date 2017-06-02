@@ -1,6 +1,6 @@
 &control 
-    dt        = 10.0 
-    dt_write  = 1000.0 
+    dt        =   10.0 
+    dt_write  =  500.0 
     dt_dep    =  500.0 
 
 /
@@ -10,7 +10,7 @@
     n_max_dep = 1
     
     thk_min   = 1e-2            ! m (minimum thickness of tracer 'layer')
-    H_min     = 3400.0          ! m 
+    H_min     = 3000.0          ! m 
     depth_max = 0.99            ! fraction of thickness
     U_max     = 200.0           ! m/a 
     

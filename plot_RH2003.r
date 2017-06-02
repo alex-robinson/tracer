@@ -12,17 +12,19 @@ if (FALSE) {
     rh0     = my.read.nc(file.path(fldr,"profile_RH2003.nc"))
     rh0$age = rh0$age*1e-3 
 
-    trc_51_101_0.10_0.00_sp_10.0 = load_tracer_profile(file.path(fldr,"RH2003_51_101_0.10_0.00_sp_10.0.nc"))
+    trc_ref = load_tracer_profile(file.path(fldr,"RH2003_501_1001_0.10_0.00_sp_10.0.nc"))
+    trc_1   = load_tracer_profile(file.path(fldr,"RH2003_51_101_0.10_0.00_sp_10.0.nc"))
+
 
 }
 
-if (TRUE) {
+if (FALSE) {
 
     kk = which(!is.na(trc_51_101_0.10_0.00_sp_10.0$age))
 
     quilt.plot(x=trc_51_101_0.10_0.00_sp_10.0$x[kk],
                y=trc_51_101_0.10_0.00_sp_10.0$z[kk]/trc_51_101_0.10_0.00_sp_10.0$H[kk],
-               z=trc_51_101_0.10_0.00_sp_10.0$age[kk],nx=101,ny=101,zlim=c(0,100))
+               z=trc_51_101_0.10_0.00_sp_10.0$age[kk],nx=101,ny=101,zlim=c(0,2))
     # points(x=trc_51_101_0.10_0.00_sp_10.0$x[kk],
     #            y=trc_51_101_0.10_0.00_sp_10.0$z[kk]*1e-3,cex=0.2)
     
