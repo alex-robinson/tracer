@@ -1,3 +1,9 @@
+&control 
+    dt        = 10.0 
+    dt_write  = 1000.0 
+    dt_dep    =  500.0 
+
+/
 
 &tracer_par
     n         = 1

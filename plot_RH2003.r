@@ -1,135 +1,34 @@
 
 library(myr)
-
-filt_tracers = function(trc)
-{
-    
-    kk = which(!is.na(trc$id))
-    dat = data.frame(id=unique(as.vector(trc$id[kk])),time=NA,x=NA,z=NA,dpth=NA,z_srf=NA,H=NA,
-                     ux=NA,uz=NA,dep_time=NA,dep_H=NA,dep_x=NA,dep_z=NA)
-
-    time = t(array(trc$time,dim=rev(dim(trc$id))))
-
-    nms = names(dat)
-
-    for (i in 1:length(dat$id)) { 
-        kk = which(trc$id==dat$id[i])
-        k  = kk[which.max(time[kk])]
-
-        for (q in 1:length(nms)) {
-            nm = nms[q]
-            dat[[nm]][i] = trc[[nm]][k]
-        }
-
-    }
-
-    return(dat)
-}
-
-calc_rh_age = function(sigma,H0,GG)
-{
-    # Calculate analytical age at the divide
-    age    = -(H0/GG)*log(sigma)
-    age[!is.finite(age)] = NA 
-    return(age)
-}
-
-calc_profile_RH2003 = function(x=NULL,z=NULL)
-{
-        # Define a 2D profile (x-z) following 
-        # Rybak and Huybrechts (2003, Annals of Glaciology)
-
-        if (is.null(x)) x = seq(0,1000,length.out=51)
-        if (is.null(z)) z = seq(0,1,length.out=101)
-
-        # Local parameters 
-        nx  = length(x)
-        nz  = length(z)
-        ng  = 3           # exponent
-        rho = 910.0       # kg/m^3
-        g   = 9.81        # m/s
-        A   = 10.0^(-16)  # Pa^3/a
-        M   = 0.1         # m/a
-        L   = 10.0^6      # m 
-
-        GG = M 
-        B  = 0 
-
-        xc = x*1e-3   # [km] => [m] 
-        sigma = z 
-
-        # Calculate H0 (should be H0=3598.4 m)
-        H0 = (20.0*M/A)^(1.0/(2.0*(ng+1)))*(1/(rho*g))^(ng/(2.0*(ng+1)))*L^(1.0/2.0)
-        
-        prof = list(x=x,z=z,xc=xc,sigma=sigma,H0=H0,GG=GG)
-
-        # Calculate H(x) 
-        prof$H = H0 * (1.0-(abs(prof$xc)/L)^((ng+1.0)/ng))^(ng/(2.0*(ng+1.0)))
-
-        prof$ux   = array(0.0,dim=c(nx,nz)) 
-        prof$uz   = array(0.0,dim=c(nx,nz))
-        prof$age  = rep(0.0,nz)
-        prof$dHdx = array(0.0,dim=c(nx,nz))
-
-        # Calculate velocities 
-        for (i in 1:(nx-1)) {
-            dHdx = (prof$H[i+1]-prof$H[i])/(prof$xc[i+1]-prof$xc[i])
-            prof$dHdx[i] = dHdx
-
-            H    = prof$H[i] 
-            for (j in 1:nz) {
-
-                prof$ux[i,j] = -(2.0*A)/(ng+1.0)*(rho*g)^ng * dHdx^(ng-1.0) *
-                  dHdx * (H^(ng+1.0)-(H-prof$sigma[j]*H)^(ng+1.0))
-
-                prof$uz[i,j] = prof$sigma[j]*(-GG+B+prof$ux[i,j]*dHdx) - B
-
-                
-            }
-        } 
-
-        # Calculate analytical age at the divide
-        prof$age = calc_rh_age(prof$sigma,H0,GG)
-
-        return(prof)
-}
-
-load_tracer_profile = function(filename,rh)
-{
-    # Load data 
-    trc = my.read.nc(filename)
-
-    # Get sigma axis 
-    trc$sigma = trc$z / max(rh$H)
-
-    # Convert time to ka 
-    trc$time     = trc$time*1e-3
-    trc$dep_time = trc$dep_time*1e-3
-    trc$age      = trc$age*1e-3 
-
-    # Calculate analytical age and error
-    trc$rh_age    = calc_rh_age(sigma=trc$sigma,H0=rh$H0,GG=rh$GG)*1e-3
-    trc$age_err   = (trc$age - trc$rh_age)
-    trc$age_err_p = 100* (trc$age - trc$rh_age) / trc$rh_age
-    trc$age_err_p[abs(trc$age)<1e-1] = NA 
-
-    return(trc)
-}
+source("functions_tracers.r")
 
 # Load data 
-if (TRUE) {
+if (FALSE) {
 
     fldr = "output/RH2003"
 
     rh = calc_profile_RH2003()
-    rh$age = rh$age*1e-3 
 
     rh0     = my.read.nc(file.path(fldr,"profile_RH2003.nc"))
     rh0$age = rh0$age*1e-3 
 
-    trc_dp = load_tracer_profile(file.path(fldr,"RH2003_51_2_0.10_0.00_dp.nc"),rh=rh)
-    # trc_sp = load_tracer_profile(file.path(fldr,"RH2003_51_2_0.10_0.00_sp.nc"),rh=rh)
+    trc_51_101_0.10_0.00_sp_10.0 = load_tracer_profile(file.path(fldr,"RH2003_51_101_0.10_0.00_sp_10.0.nc"))
+
+}
+
+if (TRUE) {
+
+    kk = which(!is.na(trc_51_101_0.10_0.00_sp_10.0$age))
+
+    quilt.plot(x=trc_51_101_0.10_0.00_sp_10.0$x[kk],
+               y=trc_51_101_0.10_0.00_sp_10.0$z[kk]/trc_51_101_0.10_0.00_sp_10.0$H[kk],
+               z=trc_51_101_0.10_0.00_sp_10.0$age[kk],nx=101,ny=101,zlim=c(0,100))
+    # points(x=trc_51_101_0.10_0.00_sp_10.0$x[kk],
+    #            y=trc_51_101_0.10_0.00_sp_10.0$z[kk]*1e-3,cex=0.2)
     
+
+    # quilt.plot(x=as.vector(rh$xx),y=as.vector(rh$zz),z=as.vector(rh$umag))
+
 }
 
 ptype = "png"

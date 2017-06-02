@@ -31,25 +31,26 @@ program tracertest
     logical             :: dep_now 
     real(prec)          :: dt_dep 
 
-    prefix       = "RH2003_analytic"
+    prefix       = "RH2003"
     fldr         = "output/"//trim(prefix)
     filename_nml = trim(prefix)//".nml"
+
+    ! Simulation parameters 
+    time_start = -160000.0 
+    time_end   = 0.0
+    call nml_read(filename_nml,"control","dt",dt)
+    call nml_read(filename_nml,"control","dt_write",dt_write)
+    call nml_read(filename_nml,"control","dt_dep",dt_dep)
 
     call calc_profile_RH2003(prof1,filename_nml)
     call profile_write(prof1,fldr=fldr,filename="profile_RH2003.nc")
 
-    ! Test tracer_update
-    time_start = -160000.0 
-    time_end   = 0.0
-    dt         = 1.0 
+    prof1%filename = gen_filename(prof1,dt)
 
     ! Initialize tracer and output file 
     call tracer2D_init(trc1,filename_nml,time=real(time,prec_time),x=prof1%xc,is_sigma=.TRUE.)
     call tracer2D_write_init(trc1,fldr,prof1%filename)
-
-    dt_write = 200.0 
-    dt_dep   = 500.0 
-
+    
     dt_write_now = 0.0 
 
     do k = 1, int((time_end-time_start)/dt)+1 
@@ -105,8 +106,7 @@ contains
         integer :: i, j 
         real(prec) :: H0, dHdx, H 
         real(prec) :: M
-        character(len=5) :: str_nx, str_nz, str_prec 
-
+        
         ! Load parameters 
         call nml_read(filename,"rh_par","nx",nx)
         call nml_read(filename,"rh_par","nz",nz)
@@ -156,25 +156,32 @@ contains
         prof%age  = 0.0 
         prof%dHdx = 0.0
 
-        ! Calculate velocities 
-        do i = 1, prof%nx-1
-            dHdx = (prof%H(i+1)-prof%H(i))/(prof%xc(i+1)-prof%xc(i))
-!             dHdx = (prof%H(i)-prof%H(i-1))/(prof%xc(i)-prof%xc(i-1))
-            prof%dHdx(i) = dHdx
+        ! Calculate slope 
+        do i = 2, prof%nx-1 
+            prof%dHdx(i) = (prof%H(i+1)-prof%H(i-1))/(prof%xc(i+1)-prof%xc(i-1))
+        end do 
 
-            H    = prof%H(i) 
+        ! Calculate velocities 
+        do i = 1, prof%nx 
+
+            H    = prof%H(i)
+            dHdx = prof%dHdx(i)
+
             do j = 1, prof%nz
 
                 prof%ux(i,j) = -(2.0*A)/(ng+1.0)*(rho*gg)**ng * dHdx**(ng-1.0) &
                   * dHdx * (H**(ng+1.0)-(H-prof%sigma(j)*H)**(ng+1.0))
+
                 prof%ux(i,j) = prof%ux(i,j)*ux_fac   ! Sets ux=0 for analytic solution at summit
+
                 prof%uz(i,j) = prof%sigma(j)*(-G+B+prof%ux(i,j)*dHdx) - B
 
             end do 
         end do 
 
+
         ! Calculate analytical age at the divide
-        prof%age    = -(H0/G)*log(prof%sigma)
+        prof%age = -(H0/G)*log(prof%sigma)
         
 !         ! Write summary 
 !         write(*,"(a,500f8.2)") "xc: ",    prof%xc*1e-3 
@@ -193,6 +200,21 @@ contains
         prof%B  = B 
         prof%M  = M 
         
+        
+        return 
+
+    end subroutine calc_profile_RH2003
+
+    function gen_filename(prof,dt) result(filename)
+
+        implicit none 
+
+        type(profile_class), intent(IN) :: prof 
+        real(prec_wrt),      intent(IN) :: dt 
+        character(len=512) :: filename 
+
+        character(len=5) :: str_nx, str_nz, str_prec, str_dt 
+
         write(str_nx,"(i5)") prof%nx
         str_nx = adjustl(str_nx) 
         write(str_nz,"(i5)") prof%nz 
@@ -201,15 +223,19 @@ contains
         if (kind(1.d0)==prec) write(str_prec,*) "dp"
         str_prec = adjustl(str_prec)
 
-        ! Generate filename based on parameter values 
-        write(prof%filename,"(a,a,a1,a,a1,f4.2,a1,f4.2,a1,a,a3)") &
-            "RH2003_", trim(str_nx), "_", trim(str_nz),"_", prof%G, "_", prof%B,"_",trim(str_prec),".nc"
+        write(str_dt,"(f5.1)") dt
+        str_dt = adjustl(str_dt)
 
-        write(*,*) "Filename: ", trim(prof%filename)
+        ! Generate filename based on parameter values 
+        write(filename,"(a,a,a1,a,a1,f4.2,a1,f4.2,a1,a,a1,a,a3)") &
+            "RH2003_", trim(str_nx), "_", trim(str_nz),"_", prof%G, "_", prof%B,"_", &
+            trim(str_prec),"_",trim(str_dt),".nc"
+
+        write(*,*) "Filename: ", trim(filename)
 
         return 
 
-    end subroutine calc_profile_RH2003
+    end function gen_filename 
 
     subroutine profile_write(prof,fldr,filename)
 
