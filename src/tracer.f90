@@ -1337,8 +1337,8 @@ contains
 
     end subroutine tracer_read
 
-    subroutine tracer_align(trc_new,trc_ref,trc)
-        ! Interpolate tracer locations/ages from trc to those of trc_ref 
+    subroutine tracer_align(trc_new,trc_ref,trc,dist_max)
+        ! Interpolate tracer ages from trc to those of trc_ref 
         ! Note: for this to work well, trc should be sufficiently high
         ! resolution to minimize interpolation errors 
 
@@ -1346,18 +1346,47 @@ contains
 
         type(tracer_class), intent(OUT) :: trc_new 
         type(tracer_class), intent(IN) :: trc_ref, trc  
+        real(prec), intent(IN) :: dist_max 
 
         ! Local variables 
-        integer :: i 
+        integer :: i, k  
+        real(prec) :: dist(trc%par%n)
 
         ! Store reference tracer information in new object 
         trc_new = trc_ref 
 
+        ! Make sure to set tagged info to missing, since
+        ! this will not be valid for trc_new 
+        trc_new%dep%time = MV 
+        trc_new%dep%H    = MV 
+        trc_new%dep%x    = MV 
+        trc_new%dep%y    = MV 
+        trc_new%dep%z    = MV 
+        
         do i = 1, trc_new%par%n 
 
             if (trc_new%now%active(i) .eq. 2) then 
+                ! Only treat active locations 
 
+                dist = MV 
+                where (trc%now%active .eq. 2)
+                    dist = sqrt( (trc_new%now%x(i)-trc%now%x)**2 &
+                               + (trc_new%now%y(i)-trc%now%y)**2)
+                end where 
 
+                k = minloc(dist,mask=dist.ne.MV,dim=1)
+
+                if (dist(k) .le. dist_max) then 
+                    trc_new%dep%time(i) = trc%dep%time(i)
+                else 
+                    trc_new%now%active(i) = 0
+                    trc_new%now%H(i)      = MV 
+                    trc_new%now%z_srf(i)  = MV
+                    trc_new%now%x(i)      = MV 
+                    trc_new%now%y(i)      = MV 
+                    trc_new%now%z(i)      = MV 
+         
+                end if 
 
             end if 
 
