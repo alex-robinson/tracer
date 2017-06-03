@@ -5,7 +5,7 @@ module tracer2D
     ! 3D array with y-dimension thickness of 1. 
 
     use tracer_precision
-    use tracer
+    use tracer3D
     use ncio    
 
     implicit none 
