@@ -1337,6 +1337,36 @@ contains
 
     end subroutine tracer_read
 
+    subroutine tracer_align(trc_new,trc_ref,trc)
+        ! Interpolate tracer locations/ages from trc to those of trc_ref 
+        ! Note: for this to work well, trc should be sufficiently high
+        ! resolution to minimize interpolation errors 
+
+        implicit none 
+
+        type(tracer_class), intent(OUT) :: trc_new 
+        type(tracer_class), intent(IN) :: trc_ref, trc  
+
+        ! Local variables 
+        integer :: i 
+
+        ! Store reference tracer information in new object 
+        trc_new = trc_ref 
+
+        do i = 1, trc_new%par%n 
+
+            if (trc_new%now%active(i) .eq. 2) then 
+
+
+
+            end if 
+
+        end do 
+
+        return 
+
+    end subroutine tracer_align
+
     subroutine which(x,ind,stat)
         ! Analagous to R::which function
         ! Returns indices that match condition x==.TRUE.
