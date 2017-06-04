@@ -3,7 +3,7 @@ library(myr)
 source("functions_tracers.r")
 
 # Load data 
-if (FALSE) {
+if (TRUE) {
 
     fldr = "output/RH2003"
 
