@@ -11,6 +11,17 @@ module tracer3D
     real(prec), parameter :: z_scale_in  = 1e0
     real(prec), parameter :: z_scale_out = 1.0/z_scale_in
 
+    type tracer_par_trans_class
+        integer :: nt 
+
+        real(prec), allocatable :: time(:)
+        real(prec), allocatable :: H_min_dep(:)
+        real(prec), allocatable :: dt_dep(:)
+        integer,    allocatable :: n_max_dep(:) 
+        real(prec), allocatable :: dt_write(:)
+        
+    end type 
+
     type tracer_par_class 
         integer :: n, n_active, n_max_dep, id_max 
         logical :: is_sigma                     ! Is the defined z-axis in sigma coords
@@ -27,22 +38,13 @@ module tracer3D
         logical    :: noise                     ! Add noise to gridded deposition location
         real(prec) :: dens_z_lim                ! Distance from surface to count density
         integer    :: dens_max                  ! Max allowed density of particles at surface
-        
         character(len=56) :: interp_method  
+
+        ! Transient parameters 
         character(len=512) :: par_trans_file 
         logical            :: use_par_trans
+        type(tracer_par_trans_class) :: tpar 
 
-    end type 
-
-    type tracer_par_trans_class
-        integer :: nt 
-
-        real(prec), allocatable :: time(:)
-        real(prec), allocatable :: H_min_dep(:)
-        real(prec), allocatable :: dt_dep(:)
-        integer,    allocatable :: n_max_dep(:) 
-        real(prec), allocatable :: dt_write(:)
-        
     end type 
 
     type tracer_state_class 
@@ -882,8 +884,10 @@ contains
         par%use_par_trans = .FALSE.
         if (trim(par%par_trans_file) .ne. "None") then 
             par%use_par_trans = .TRUE. 
-        end if 
 
+            call tracer_par_trans_load(par%tpar,par%par_trans_file)
+        end if 
+        
         ! Consistency checks 
         if (trim(par%interp_method) .ne. "linear" .and. &
             trim(par%interp_method) .ne. "spline" ) then 
@@ -892,10 +896,105 @@ contains
             stop 
         end if 
 
+
         return 
 
     end subroutine tracer_par_load
     
+    subroutine tracer_par_trans_load(tpar,filename)
+        ! This subroutine will read a time series of
+        ! several columns [time,par1,par2,...,parN] from an ascii file.
+        ! Header should be commented by "#" or "!"
+        implicit none 
+
+        type(tracer_par_trans_class), intent(OUT) :: tpar 
+        character(len=*), intent(IN) :: filename 
+
+        ! Local variables 
+        integer, parameter :: f = 191
+        integer, parameter :: nmax = 10000
+
+        integer :: i, stat, n 
+        character(len=256) :: str, str1 
+        real(4) :: x(nmax), y1(nmax), y2(nmax), y3(nmax), y4(nmax)
+
+        ! Open file for reading 
+        open(f,file=filename,status="old")
+
+        ! Read the header in the first line: 
+        read(f,*,IOSTAT=stat) str
+
+        n = 0 
+
+        do i = 1, nmax 
+            read(f,'(a100)',IOSTAT=stat) str 
+
+            ! Exit loop if the end-of-file is reached 
+            if(IS_IOSTAT_END(stat)) exit 
+
+            str1 = adjustl(trim(str))
+!            str1=str
+            if ( len(trim(str1)) .gt. 0 ) then 
+                if ( .not. (str1(1:1) == "!" .or. &
+                            str1(1:1) == "#") ) then 
+                    n = n+1
+                    read(str1,*) x(n), y1(n), y2(n), y3(n), y4(n)
+                end if
+            end if  
+        end do 
+
+        ! Close the file
+        close(f) 
+
+        if (n .eq. nmax) then 
+            write(*,*) "tracer_par_trans_load:: warning: "// &
+                       "Maximum length of time series reached, ", nmax
+            write(*,*) "Time series in the file may be longer: ", trim(filename)
+        end if 
+
+        ! Allocate the time series object and store output data 
+        call tracer_par_trans_allocate(tpar,n)
+
+        tpar%time      =  x(1:n) 
+        tpar%H_min_dep = y1(1:n) 
+        tpar%dt_dep    = y2(1:n) 
+        tpar%n_max_dep = y3(1:n) 
+        tpar%dt_write  = y4(1:n) 
+
+        write(*,*) "tracer_par_trans_load:: Time series read from file: "//trim(filename)
+        write(*,"(a12,4a10)") "time", "H_min_dep", "dt_dep", "n_max_dep", "dt_write"
+        do i = 1, n 
+            write(*,"(g12.3,f10.1,f10.1,i10,f10.1)") tpar%time(i), tpar%H_min_dep(i), tpar%dt_dep(i), &
+                       tpar%n_max_dep(i), tpar%dt_write(i) 
+        end do
+
+        return 
+
+    end subroutine tracer_par_trans_load 
+
+    subroutine tracer_par_trans_allocate(tpar,n)
+
+        implicit none 
+
+        type(tracer_par_trans_class), intent(INOUT) :: tpar 
+        integer, intent(IN) :: n 
+
+        ! Make sure all arrays are deallocated first 
+        if (allocated(tpar%time))      deallocate(tpar%time)
+        if (allocated(tpar%H_min_dep)) deallocate(tpar%H_min_dep)
+        if (allocated(tpar%dt_dep))    deallocate(tpar%dt_dep)
+        if (allocated(tpar%n_max_dep)) deallocate(tpar%n_max_dep)
+        if (allocated(tpar%dt_write))  deallocate(tpar%dt_write)
+        
+        allocate(tpar%time(n))
+        allocate(tpar%H_min_dep(n))
+        allocate(tpar%dt_dep(n))
+        allocate(tpar%n_max_dep(n))
+        allocate(tpar%dt_write(n))
+        
+        return 
+
+    end subroutine tracer_par_trans_allocate
 
     subroutine tracer_allocate(now,dep,n)
 

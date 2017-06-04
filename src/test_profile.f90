@@ -2,6 +2,7 @@
 program tracertest 
 
     use nml 
+    use ncio 
     use tracer 
 
     implicit none 

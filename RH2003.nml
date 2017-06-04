@@ -24,6 +24,9 @@
     
     ! Method 
     interp_method = "linear"    ! "linear" or "spline"
+
+    par_trans_file = "tracer_par_transient.txt"
+    
 /
 
 &rh_par
