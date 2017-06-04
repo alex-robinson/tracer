@@ -1,13 +1,13 @@
 &control 
     dt        = 10.0 
-    dt_write  =  500.0 
-    dt_dep    = 1000.0 
+    dt_write  = 5000.0 
+    dt_dep    = 500.0 
 
 /
 
 &tracer_par
-    n         = 2000
-    n_max_dep = 100
+    n         = 5000
+    n_max_dep = 50
     
     thk_min   = 1e-2            ! m (minimum thickness of tracer 'layer')
     H_min     = 1.0             ! m 
@@ -27,8 +27,8 @@
 /
 
 &rh_par
-    nx  = 501         ! default  51
-    nz  = 201         ! default 101
+    nx  = 51          ! default  51
+    nz  = 101         ! default 101
     L   = 1e6         ! [m] Length 
     G   = 0.10        ! [m/a] Accumulation rate 
     B   = 0.00        ! [m/a] Basal melt rate  

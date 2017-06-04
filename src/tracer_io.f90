@@ -1,14 +1,13 @@
 
 module tracer_io 
 
+    use ncio 
+    
     use tracer_precision
     use tracer_interp 
     use tracer3D 
 
     implicit none 
-
-
-
 
 
 contains 

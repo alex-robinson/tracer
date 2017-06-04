@@ -1,11 +1,8 @@
 
 program tracertest 
 
-    use ncio
     use nml 
     use tracer 
-    use tracer2D 
-    use tracer_precision 
 
     implicit none 
 
@@ -31,7 +28,7 @@ program tracertest
     logical             :: dep_now 
     real(prec)          :: dt_dep 
 
-    prefix       = "RH2003_analytic"
+    prefix       = "RH2003"
     fldr         = "output/"//trim(prefix)
     filename_nml = trim(prefix)//".nml"
 
