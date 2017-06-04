@@ -29,6 +29,20 @@ module tracer3D
         integer    :: dens_max                  ! Max allowed density of particles at surface
         
         character(len=56) :: interp_method  
+        character(len=512) :: par_trans_file 
+        logical            :: use_par_trans
+
+    end type 
+
+    type tracer_par_trans_class
+        integer :: nt 
+
+        real(prec), allocatable :: time(:)
+        real(prec), allocatable :: H_min_dep(:)
+        real(prec), allocatable :: dt_dep(:)
+        integer,    allocatable :: n_max_dep(:) 
+        real(prec), allocatable :: dt_write(:)
+        
     end type 
 
     type tracer_state_class 
@@ -107,7 +121,7 @@ module tracer3D
     public :: tracer_init 
     public :: tracer_update 
     public :: tracer_end 
-    
+
     ! Conversion constants
     public :: z_scale_in 
     public :: z_scale_out 
@@ -468,78 +482,84 @@ contains
         ! How many points can be activated?
         ntot = min(nmax,count(now%active == 0))
 
-        ! Determine initial desired distribution of points on low resolution grid
-        p_init = gen_distribution(H,H_min=par%H_min_dep*z_scale_in,alpha=par%alpha,dist=par%weight)
-        p = p_init  
 
-        ! Generate random numbers to populate points 
-        allocate(jit(2,ntot))
+        if (ntot .gt. 0) then 
+            ! Proceed with activation, since points are available 
 
-        if (par%noise) then 
-            call random_number(jit)
-            jit = (jit - 0.5)
-            jit(1,:) = jit(1,:)*(x(2)-x(1)) 
+            ! Determine initial desired distribution of points on low resolution grid
+            p_init = gen_distribution(H,H_min=par%H_min_dep*z_scale_in,alpha=par%alpha,dist=par%weight)
+            p = p_init  
 
-            if (size(y,1) .gt. 2) then 
-                jit(2,:) = jit(2,:)*(y(2)-y(1)) 
-            else   ! Profile
-                jit(2,:) = 0.0 
-            end if 
-        else 
-            jit = 0.0 
-        end if 
+            ! Generate random numbers to populate points 
+            allocate(jit(2,ntot))
 
-!         write(*,*) "range jit: ", minval(jit), maxval(jit)
-!         write(*,*) "npts: ", count(now%active == 0)
-!         write(*,*) "ntot: ", ntot 
-!         stop 
-    
-        ! Calculate domain boundaries to be able to apply limits 
-        xmin = minval(x) 
-        xmax = maxval(x) 
-        ymin = minval(y) 
-        ymax = maxval(y) 
+            if (par%noise) then 
+                call random_number(jit)
+                jit = (jit - 0.5)
+                jit(1,:) = jit(1,:)*(x(2)-x(1)) 
 
-        if (maxval(p_init) .gt. 0.0) then 
-            ! Activate points in locations with non-zero probability
-            ! This if-statement ensures some valid points currently exist in the domain
-            
-            k = 0 
-
-            do j = 1, par%n 
-
-                if (now%active(j)==0) then 
-
-                    now%active(j) = 1
-                    k = k + 1
-                    par%id_max = par%id_max+1 
-                    now%id(j)  = par%id_max 
-
-                    ij = maxloc(p,mask=p.gt.0.0)
-                    now%x(j) = x(ij(1)) + jit(1,k)
-                    now%y(j) = y(ij(2)) + jit(2,k)
-                    
-                    if (now%x(j) .lt. xmin) now%x(j) = xmin 
-                    if (now%x(j) .gt. xmax) now%x(j) = xmax 
-                    if (now%y(j) .lt. ymin) now%y(j) = ymin 
-                    if (now%y(j) .gt. ymax) now%y(j) = ymax 
-                    
-                    p(ij(1),ij(2)) = 0.0 
-                     
+                if (size(y,1) .gt. 2) then 
+                    jit(2,:) = jit(2,:)*(y(2)-y(1)) 
+                else   ! Profile
+                    jit(2,:) = 0.0 
                 end if 
+            else 
+                jit = 0.0 
+            end if 
 
-                ! Stop when all points have been allocated
-                if (k .ge. ntot) exit 
+    !         write(*,*) "range jit: ", minval(jit), maxval(jit)
+    !         write(*,*) "npts: ", count(now%active == 0)
+    !         write(*,*) "ntot: ", ntot 
+    !         stop 
+        
+            ! Calculate domain boundaries to be able to apply limits 
+            xmin = minval(x) 
+            xmax = maxval(x) 
+            ymin = minval(y) 
+            ymax = maxval(y) 
 
-                ! If there are no more points with non-zero probability, reset probability
-                if (maxval(p) .eq. 0.0) p = p_init 
+            if (maxval(p_init) .gt. 0.0) then 
+                ! Activate points in locations with non-zero probability
+                ! This if-statement ensures some valid points currently exist in the domain
+                
+                k = 0 
 
-            end do 
-          
-        end if
+                do j = 1, par%n 
 
-        ! Summary 
-!         write(*,*) "tracer_activate:: ", count(now%active == 0), count(now%active .eq. 1), count(now%active .eq. 2)
+                    if (now%active(j)==0) then 
+
+                        now%active(j) = 1
+                        k = k + 1
+                        par%id_max = par%id_max+1 
+                        now%id(j)  = par%id_max 
+
+                        ij = maxloc(p,mask=p.gt.0.0)
+                        now%x(j) = x(ij(1)) + jit(1,k)
+                        now%y(j) = y(ij(2)) + jit(2,k)
+                        
+                        if (now%x(j) .lt. xmin) now%x(j) = xmin 
+                        if (now%x(j) .gt. xmax) now%x(j) = xmax 
+                        if (now%y(j) .lt. ymin) now%y(j) = ymin 
+                        if (now%y(j) .gt. ymax) now%y(j) = ymax 
+                        
+                        p(ij(1),ij(2)) = 0.0 
+                         
+                    end if 
+
+                    ! Stop when all points have been allocated
+                    if (k .ge. ntot) exit 
+
+                    ! If there are no more points with non-zero probability, reset probability
+                    if (maxval(p) .eq. 0.0) p = p_init 
+
+                end do 
+              
+            end if
+
+            ! Summary 
+    !         write(*,*) "tracer_activate:: ", count(now%active == 0), count(now%active .eq. 1), count(now%active .eq. 2)
+
+        end if 
 
         return 
 
@@ -691,7 +711,7 @@ contains
         dy(1)    = dy(2)
         dy(ny+1) = dy(ny)
         
-        dt = 1.0 ! Isochrone uncertainty of 1 ka  
+        dt = 5.0 ! Isochrone uncertainty of ±5 ka  
         dz = (trc%stats%depth_norm(2) - trc%stats%depth_norm(1))/2.0   ! depth_norm is equally spaced
 
         ! Loop over grid and fill in information
@@ -837,26 +857,32 @@ contains
 !         par%dens_z_lim = 50.0 ! m
 !         par%dens_max   = 10   ! Number of points
         
-        call nml_read(filename,"tracer_par","n",            par%n)
-        call nml_read(filename,"tracer_par","n_max_dep",    par%n_max_dep)
-        call nml_read(filename,"tracer_par","thk_min",      par%thk_min)
-        call nml_read(filename,"tracer_par","H_min",        par%H_min)
-        call nml_read(filename,"tracer_par","depth_max",    par%depth_max)
-        call nml_read(filename,"tracer_par","U_max",        par%U_max)
-        call nml_read(filename,"tracer_par","H_min_dep",    par%H_min_dep)
-        call nml_read(filename,"tracer_par","alpha",        par%alpha)
-        call nml_read(filename,"tracer_par","weight",       par%weight)
-        call nml_read(filename,"tracer_par","noise",        par%noise)
-        call nml_read(filename,"tracer_par","dens_z_lim",   par%dens_z_lim)
-        call nml_read(filename,"tracer_par","dens_max",     par%dens_max)
-        call nml_read(filename,"tracer_par","interp_method",par%interp_method)
-        
+        call nml_read(filename,"tracer_par","n",             par%n)
+        call nml_read(filename,"tracer_par","n_max_dep",     par%n_max_dep)
+        call nml_read(filename,"tracer_par","thk_min",       par%thk_min)
+        call nml_read(filename,"tracer_par","H_min",         par%H_min)
+        call nml_read(filename,"tracer_par","depth_max",     par%depth_max)
+        call nml_read(filename,"tracer_par","U_max",         par%U_max)
+        call nml_read(filename,"tracer_par","H_min_dep",     par%H_min_dep)
+        call nml_read(filename,"tracer_par","alpha",         par%alpha)
+        call nml_read(filename,"tracer_par","weight",        par%weight)
+        call nml_read(filename,"tracer_par","noise",         par%noise)
+        call nml_read(filename,"tracer_par","dens_z_lim",    par%dens_z_lim)
+        call nml_read(filename,"tracer_par","dens_max",      par%dens_max)
+        call nml_read(filename,"tracer_par","interp_method", par%interp_method)
+        call nml_read(filename,"tracer_par","par_trans_file",par%par_trans_file)
+    
         ! Define additional parameter values
         par%is_sigma  = is_sigma 
         par%n_active  = 0 
         par%time_now  = 0.0             ! year
         par%time_old  = 0.0             ! year
         par%dt        = 0.0             ! year
+
+        par%use_par_trans = .FALSE.
+        if (trim(par%par_trans_file) .ne. "None") then 
+            par%use_par_trans = .TRUE. 
+        end if 
 
         ! Consistency checks 
         if (trim(par%interp_method) .ne. "linear" .and. &
