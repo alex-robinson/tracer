@@ -146,8 +146,8 @@ obj_bspline =   $(objdir)/bspline_sub_module.o    \
 
 obj_tracer =    $(objdir)/tracer_precision.o \
 				$(objdir)/tracer_interp.o \
-				$(objdir)/tracer2D.o \
 				$(objdir)/tracer3D.o \
+				$(objdir)/tracer2D.o \
 				$(objdir)/tracer_io.o \
 				$(objdir)/tracer.o
 				

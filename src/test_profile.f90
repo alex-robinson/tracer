@@ -36,9 +36,9 @@ program tracertest
     ! Simulation parameters 
     time_start = -160000.0 
     time_end   = 0.0
-    call nml_read(filename_nml,"control","dt",dt)
-    call nml_read(filename_nml,"control","dt_write",dt_write)
-    call nml_read(filename_nml,"control","dt_dep",dt_dep)
+    call nml_read(filename_nml,"tracer_par","dt",dt)
+    call nml_read(filename_nml,"tracer_par","dt_write",dt_write)
+    call nml_read(filename_nml,"tracer_par","dt_dep",dt_dep)
 
     call calc_profile_RH2003(prof1,filename_nml)
     call profile_write(prof1,fldr=fldr,filename="profile_RH2003.nc")

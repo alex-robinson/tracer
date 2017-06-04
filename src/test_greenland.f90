@@ -3,7 +3,7 @@ program tracertest
 
     use ncio 
     use tracer 
-    
+
     implicit none 
 
     type(tracer_class) :: trc1
@@ -51,7 +51,7 @@ program tracertest
 
     ! Switch uz direction so that + is up 
     uz = -uz 
-    
+
     fldr     = "output"
     filename       = "GRL-20KM_trc1.nc"
     filename_stats = "GRL-20KM_trc1-stats.nc"
@@ -59,7 +59,8 @@ program tracertest
     ! Test tracer_update
     time     = 0.0 
     time_end = 102.0
-    dt       = 1.0 
+    
+    call nml_read(filename_nml,"tracer_par","dt",dt)
 
 !     sigma = 1.0 - sigma 
 !     write(*,*) "sigma = ", sigma 

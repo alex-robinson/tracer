@@ -25,6 +25,7 @@ module tracer3D
     type tracer_par_class 
         integer :: n, n_active, n_max_dep, id_max 
         logical :: is_sigma                     ! Is the defined z-axis in sigma coords
+        real(prec_time) :: dt_dep, dt_write 
         real(prec_time) :: time_now, time_old
         real(prec_time) :: time_dep, time_write 
         real(prec_time) :: dt
@@ -146,6 +147,11 @@ contains
         ! Load the parameters
         call tracer_par_load(trc%par,filename,is_sigma)
 
+        ! Update the transient parameters
+        if (trc%par%use_par_trans) then 
+            call tracer_par_update(trc%par,trc%par%tpar,time)
+        end if 
+
         ! Allocate the state variables 
         call tracer_allocate(trc%now,trc%dep,n=trc%par%n)
         call tracer_allocate_stats(trc%stats,x,y)
@@ -224,6 +230,11 @@ contains
         real(prec), allocatable :: usig1(:,:,:)
         real(prec) :: ux0, uy0, uz0 
         real(prec) :: dt 
+
+        ! Update the transient parameters
+        if (trc%par%use_par_trans) then 
+            call tracer_par_update(trc%par,trc%par%tpar,time)
+        end if 
 
         ! Update current time and time step
         trc%par%time_old = trc%par%time_now 
@@ -887,7 +898,7 @@ contains
 
             call tracer_par_trans_load(par%tpar,par%par_trans_file)
         end if 
-        
+
         ! Consistency checks 
         if (trim(par%interp_method) .ne. "linear" .and. &
             trim(par%interp_method) .ne. "spline" ) then 
@@ -901,6 +912,35 @@ contains
 
     end subroutine tracer_par_load
     
+    subroutine tracer_par_update(par,tpar,time)
+        ! Update transient parameter values for current time 
+
+        implicit none 
+
+        type(tracer_par_class), intent(INOUT) :: par 
+        type(tracer_par_trans_class), intent(IN) :: tpar 
+        real(prec_time) :: time 
+
+        ! Local variables 
+        integer :: i, n, k  
+
+        n = size(tpar%time)
+
+        k = 1
+        do i = 1, n 
+            if (tpar%time(i) .gt. time) exit 
+            k = k+1
+        end do 
+
+        par%H_min_dep = tpar%H_min_dep(k) 
+        par%dt_dep    = tpar%dt_dep(k)
+        par%n_max_dep = tpar%n_max_dep(k) 
+        par%dt_write  = tpar%dt_write(k) 
+
+        return 
+
+    end subroutine tracer_par_update
+
     subroutine tracer_par_trans_load(tpar,filename)
         ! This subroutine will read a time series of
         ! several columns [time,par1,par2,...,parN] from an ascii file.

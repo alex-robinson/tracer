@@ -1,13 +1,9 @@
-&control 
-    dt        =   10.0 
-    dt_write  =  500.0 
-    dt_dep    =  500.0 
-
-/
-
 &tracer_par
+    dt        =   10.0 
     n         = 1
     n_max_dep = 1
+    dt_dep    =  500.0 
+    dt_write  =  500.0 
     
     thk_min   = 1e-2            ! m (minimum thickness of tracer 'layer')
     H_min     = 3000.0          ! m 
