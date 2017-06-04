@@ -121,7 +121,7 @@ $(objdir)/tracer3D.o: $(srcdir)/tracer3D.f90 $(objdir)/tracer_precision.o $(objd
 $(objdir)/tracer2D.o: $(srcdir)/tracer2D.f90 $(objdir)/tracer3D.o $(objdir)/tracer_precision.o $(objdir)/ncio.o
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
-$(objdir)/tracer_io.o: $(srcdir)/tracer_io.f90 $(objdir)/tracer.o $(objdir)/tracer_precision.o $(objdir)/ncio.o
+$(objdir)/tracer_io.o: $(srcdir)/tracer_io.f90 $(objdir)/tracer3D.o $(objdir)/tracer_precision.o $(objdir)/ncio.o
 	$(FC) $(DFLAGS) $(FLAGS) -c -o $@ $<
 
 $(objdir)/tracer.o: $(srcdir)/tracer.f90 $(objdir)/tracer_precision.o $(objdir)/nml.o $(objdir)/ncio.o \
