@@ -326,7 +326,7 @@ contains
             write(*,*) "spline weights calculated."
         end if 
 
-        write(*,*) write(*,*) "tracer_update:: ", time, "init complete" 
+        write(*,*) "tracer_update:: ", time, "init complete" 
 
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, trc%par%n 
