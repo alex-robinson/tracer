@@ -231,6 +231,8 @@ contains
         real(prec) :: ux0, uy0, uz0 
         real(prec) :: dt 
 
+        write(*,*) "tracer_update:: ", time 
+
         ! Update the transient parameters
         if (trc%par%use_par_trans) then 
             call tracer_par_update(trc%par,trc%par%tpar,time)
@@ -282,6 +284,8 @@ contains
         ! Also determine whether z-axis is initially ascending or descending 
         rev_z = (zc(1) .gt. zc(size(zc)))
 
+        write(*,*) "tracer_update:: ", zc(1), zc(size(zc)), rev_z 
+
         call tracer_reshape1D_vec(x, x1,rev=.FALSE.)
         call tracer_reshape1D_vec(y, y1,rev=.FALSE.)
         call tracer_reshape1D_vec(real(zc,kind=prec),z1,rev=rev_z)
@@ -322,6 +326,7 @@ contains
             write(*,*) "spline weights calculated."
         end if 
 
+        write(*,*) write(*,*) "tracer_update:: ", time, "init complete" 
 
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, trc%par%n 
