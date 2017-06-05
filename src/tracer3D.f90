@@ -322,14 +322,8 @@ contains
             write(*,*) "spline weights calculated."
         end if 
 
-        write(*,*) "tracer_update:: ", time, "init complete" 
-
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, trc%par%n 
-
-            if (mod(i,100).eq.0) then 
-                write(*,*) "tracer_update:: ", time, i, trc%par%n 
-            end if 
             
             if (trc%now%active(i) .eq. 2) then 
 
@@ -1314,7 +1308,9 @@ contains
                 else 
                     do i = 1, nx 
                     do j = 1, ny 
+                    do k = 1, nz 
                         var1(i,j,k)  = var(k,j,i) 
+                    end do 
                     end do 
                     end do 
                 end if 
