@@ -151,7 +151,7 @@ contains
 
         real(prec_wrt) :: tmp(size(trc%now%x))
 
-        trc%par%time_write = time 
+        trc%now%time_write = time 
 
         path_out = trim(fldr)//"/"//trim(filename)
 
@@ -164,6 +164,7 @@ contains
         if (time_in .ne. MV .and. abs(time-time_in).gt.1e-2) nt = nt+1 
 
         call nc_write(path_out,"time",real(time,prec_wrt),dim1="time",start=[nt],count=[1],missing_value=mv_wrt)
+        call nc_write(path_out,"n_active",trc%par%n_active,dim1="time",start=[nt],count=[1],missing_value=int(mv_wrt))
         
         tmp = trc%now%x
         where(trc%now%x .ne. mv_wrt) tmp = trc%now%x*1e-3

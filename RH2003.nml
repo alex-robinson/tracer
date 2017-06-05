@@ -1,6 +1,6 @@
 &tracer_par
     dt        = 10.0
-    n         = 5000
+    n         = 3000
     n_max_dep = 50
     dt_dep    = 500.0 
     dt_write  = 5000.0 

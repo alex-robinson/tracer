@@ -25,10 +25,7 @@ module tracer3D
     type tracer_par_class 
         integer :: n, n_active, n_max_dep, id_max 
         logical :: is_sigma                     ! Is the defined z-axis in sigma coords
-        real(prec_time) :: dt_dep, dt_write 
-        real(prec_time) :: time_now, time_old
-        real(prec_time) :: time_dep, time_write 
-        real(prec_time) :: dt
+        real(prec_time) :: dt, dt_dep, dt_write 
         real(prec) :: thk_min                   ! Minimum thickness of tracer (m)
         real(prec) :: H_min                     ! Minimum ice thickness to track (m)
         real(prec) :: depth_max                 ! Maximum depth of tracer (fraction)
@@ -48,7 +45,10 @@ module tracer3D
 
     end type 
 
-    type tracer_state_class 
+    type tracer_state_class
+        real(prec_time) :: time, time_old
+        real(prec_time) :: time_dep, time_write 
+        real(prec_time) :: dt  
         integer, allocatable :: active(:), id(:)
         real(prec), allocatable :: x(:), y(:), z(:), sigma(:)
         real(prec), allocatable :: ux(:), uy(:), uz(:)
@@ -195,9 +195,9 @@ contains
         trc%par%id_max    = 0 
 
         ! Initialize the time (to one older than now)
-        trc%par%time_now   = time - 1000.0_dp
-        trc%par%time_dep   = time - 1000.0 
-        trc%par%time_write = time - 1000.0 
+        trc%now%time   = time - 1000.0_dp
+        trc%now%time_dep   = time - 1000.0 
+        trc%now%time_write = time - 1000.0 
 
         ! Initialize random number generator 
         call random_seed() 
@@ -237,12 +237,12 @@ contains
         end if 
 
         ! Update current time and time step
-        trc%par%time_old = trc%par%time_now 
-        trc%par%time_now = time 
-        trc%par%dt       = dble(trc%par%time_now) - dble(trc%par%time_old)
+        trc%now%time_old = trc%now%time 
+        trc%now%time     = time 
+        trc%now%dt       = real(dble(trc%now%time) - dble(trc%now%time_old),prec_time)
 
         ! Update record of last deposition time if dep_now
-        if (dep_now) trc%par%time_dep = trc%par%time_now 
+        if (dep_now) trc%now%time_dep = trc%now%time 
 
         ! Determine order of indices (default ijk)
         idx_order = "ijk"
@@ -365,9 +365,9 @@ contains
                 end if 
 
                 ! Update acceleration term 
-                trc%now%ax(i) = (trc%now%ux(i) - ux0) / trc%par%dt
-                trc%now%ay(i) = (trc%now%uy(i) - uy0) / trc%par%dt
-                trc%now%az(i) = (trc%now%uz(i) - uz0) / trc%par%dt
+                trc%now%ax(i) = (trc%now%ux(i) - ux0) / trc%now%dt
+                trc%now%ay(i) = (trc%now%uy(i) - uy0) / trc%now%dt
+                trc%now%az(i) = (trc%now%uz(i) - uz0) / trc%now%dt
 
                 ! Filler values of the tracer state, in the future these should
                 ! equal the surface temperature and the accumulation rate at the time of
@@ -384,9 +384,9 @@ contains
 
         ! Update the tracer positions 
         call calc_position(trc%now%x,trc%now%y,trc%now%z,trc%now%ux,trc%now%uy,trc%now%uz, &
-                           trc%now%ax,trc%now%ay,trc%now%az,trc%par%dt,trc%now%active)
+                           trc%now%ax,trc%now%ay,trc%now%az,trc%now%dt,trc%now%active)
 
-!         call calc_position(trc%now%x,trc%now%y,trc%now%dpth,trc%now%ux,trc%now%uy,-trc%now%uz,trc%par%dt,trc%now%active)
+!         call calc_position(trc%now%x,trc%now%y,trc%now%dpth,trc%now%ux,trc%now%uy,-trc%now%uz,trc%now%dt,trc%now%active)
         trc%now%dpth = max(trc%now%z_srf - trc%now%z, 0.0) 
 
         ! Destroy points that moved outside the valid region 
@@ -422,7 +422,7 @@ contains
                 trc%now%thk(i) = 0.3 
 
                 ! Define deposition values 
-                trc%dep%time(i) = trc%par%time_now 
+                trc%dep%time(i) = trc%now%time 
                 trc%dep%H(i)    = trc%now%H(i)
                 trc%dep%x(i)    = trc%now%x(i)
                 trc%dep%y(i)    = trc%now%y(i)
@@ -870,8 +870,11 @@ contains
 !         par%dens_z_lim = 50.0 ! m
 !         par%dens_max   = 10   ! Number of points
         
+        call nml_read(filename,"tracer_par","dt",            par%dt)
         call nml_read(filename,"tracer_par","n",             par%n)
         call nml_read(filename,"tracer_par","n_max_dep",     par%n_max_dep)
+        call nml_read(filename,"tracer_par","dt_dep",        par%dt_dep)
+        call nml_read(filename,"tracer_par","dt_write",      par%dt_write)
         call nml_read(filename,"tracer_par","thk_min",       par%thk_min)
         call nml_read(filename,"tracer_par","H_min",         par%H_min)
         call nml_read(filename,"tracer_par","depth_max",     par%depth_max)
@@ -888,9 +891,6 @@ contains
         ! Define additional parameter values
         par%is_sigma  = is_sigma 
         par%n_active  = 0 
-        par%time_now  = 0.0             ! year
-        par%time_old  = 0.0             ! year
-        par%dt        = 0.0             ! year
 
         par%use_par_trans = .FALSE.
         if (trim(par%par_trans_file) .ne. "None") then 
@@ -926,8 +926,11 @@ contains
 
         n = size(tpar%time)
 
+        ! Initially assume the first row is correct 
         k = 1
-        do i = 1, n 
+        
+        ! Check to see if one of following rows is correct, update k 
+        do i = 2, n 
             if (tpar%time(i) .gt. time) exit 
             k = k+1
         end do 

@@ -16,7 +16,7 @@ module tracer_io
     public :: tracer_read 
     public :: tracer_align 
     public :: tracer_import_eulerian
-    
+
 contains 
 
     ! ================================================
@@ -62,7 +62,7 @@ contains
         real(prec_wrt) :: tmp(size(trc%now%x))
         character(len=512) :: path_out 
 
-        trc%par%time_write = time 
+        trc%now%time_write = time 
 
         path_out = trim(fldr)//"/"//trim(filename)
 

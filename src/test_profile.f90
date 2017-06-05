@@ -24,10 +24,8 @@ program tracertest
     type(profile_class) :: prof1 
     
     integer :: k, kmax, q 
-    real(prec) :: time, time_start, time_end, dt  
-    real(prec) :: dt_write, dt_write_now  
-    logical             :: dep_now 
-    real(prec)          :: dt_dep 
+    real(prec) :: time, time_start, time_end  
+    logical    :: dep_now, write_now   
 
     prefix       = "RH2003"
     fldr         = "output/"//trim(prefix)
@@ -36,48 +34,37 @@ program tracertest
     ! Simulation parameters 
     time_start = -160000.0 
     time_end   = 0.0
-    call nml_read(filename_nml,"tracer_par","dt",dt)
-    call nml_read(filename_nml,"tracer_par","dt_write",dt_write)
-    call nml_read(filename_nml,"tracer_par","dt_dep",dt_dep)
 
     call calc_profile_RH2003(prof1,filename_nml)
     call profile_write(prof1,fldr=fldr,filename="profile_RH2003.nc")
 
-    prof1%filename = gen_filename(prof1,dt)
-
     ! Initialize tracer and output file 
-    call tracer2D_init(trc1,filename_nml,time=real(time,prec_time),x=prof1%xc,is_sigma=.TRUE.)
+    call tracer2D_init(trc1,filename_nml,time=real(time_start,prec_time),x=prof1%xc,is_sigma=.TRUE.)
+
+    prof1%filename = gen_filename(prof1,trc1%par%dt)
     call tracer2D_write_init(trc1,fldr,prof1%filename)
 
-    dt_write_now = 0.0 
+    do k = 1, int((time_end-time_start)/trc1%par%dt)+1 
 
-    do k = 1, int((time_end-time_start)/dt)+1 
-
-        time = time_start + dt*(k-1) 
+        time = time_start + trc1%par%dt*(k-1) 
 
         dep_now  = .FALSE.
-        if (mod(time,dt_dep) .eq. 0.0) dep_now = .TRUE. 
-
-        if (maxval(prof1%ux) .gt. 0.0) then 
-            ! Calculating full 2D profile, so increase writing output for younger ages
-
-            if (time .ge. -12.0d3) dt_write = 200.d0 
-            if (time .ge.  -8.0d3) dt_write = 100.d0    
-            if (time .ge.  -2.0d3) dt_write =  50.d0    
-
-        end if
+        if (mod(time,trc1%par%dt_dep) .eq. 0.0) dep_now = .TRUE. 
 
         call tracer2D_update(trc1,time=real(time,prec_time), &
                              x=prof1%xc,z=prof1%sigma,z_srf=prof1%H,H=prof1%H, &
                              ux=prof1%ux,uz=prof1%uz,dep_now=dep_now,stats_now=.FALSE.)
 
-        if (k .gt. 1) dt_write_now = dt_write_now+dt 
-        if (dt_write_now .eq. 0.0 .or. dt_write_now .ge. dt_write) then 
+        write_now = .FALSE. 
+        if (mod(time,trc1%par%dt_write) .eq. 0.0) write_now = .TRUE. 
+
+        if (write_now) then 
             call tracer2D_write(trc1,real(time,prec_time),fldr,prof1%filename)
-            dt_write_now = 0.0 
-            write(*,*) "time = ", time, trc1%par%dt, trc1%par%n_active
         end if 
 
+        if (mod(time,5000.0) .eq. 0.0) then 
+            write(*,*) "time = ", time, trc1%par%dt, trc1%par%n_active
+        end if 
     end do 
 
 !     ! Write stats 
