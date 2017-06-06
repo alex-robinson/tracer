@@ -3,7 +3,7 @@ library(myr)
 source("functions_tracers.r")
 
 # Load data 
-if (FALSE) {
+if (TRUE) {
 
     fldr = "output/RH2003"
 
@@ -12,7 +12,7 @@ if (FALSE) {
     rh0     = my.read.nc(file.path(fldr,"profile_RH2003.nc"))
     rh0$age = rh0$age*1e-3 
 
-    trc_ref = load_tracer_profile(file.path(fldr,"RH2003_501_201_0.10_0.00_dp_10.0.nc"))
+    trc_ref = load_tracer_profile(file.path(fldr,"RH2003_501_201_0.10_0.00_sp_10.0.nc"))
     trc_1   = load_tracer_profile(file.path(fldr,"RH2003_51_101_0.10_0.00_sp_10.0.nc"))
 
     # trc_ref = load_tracer_profile(file.path(fldr,"RH2003_501_201_0.10_0.00_sp_10.0.nc"))
@@ -21,10 +21,10 @@ if (FALSE) {
     # Generate gridded results for comparisons
     grd = list(x=seq(0,1000,length.out=101),y=seq(0,1,length.out=101))
 
-    kk = which(!is.na(trc_ref$age))
+    kk = which(!is.na(trc_ref$x))
     qp0 = as.image(Z=trc_ref$age[kk],x=cbind(trc_ref$x[kk],trc_ref$z[kk]/trc_ref$H[kk]),grid=grd)
 
-    kk = which(!is.na(trc_1$age))
+    kk = which(!is.na(trc_1$x))
     qp1 = as.image(Z=trc_1$age[kk],x=cbind(trc_1$x[kk],trc_1$z[kk]/trc_1$H[kk]),grid=grd)
 
     grd = list(x=seq(0,1000,length.out=101),y=seq(0,rh$H0,length.out=101))
@@ -36,7 +36,7 @@ ptype = "png"
 colax = "grey40"
 
 # PLOT age estimate with error comparison with high resolution reference sim
-if (FALSE) {
+if (TRUE) {
 
     myfigure("plots","age-err_resolution",asp=2.2,pointsize=12,type=ptype)
     par(col=colax,col.axis=colax,col.lab=colax)
@@ -108,7 +108,7 @@ if (FALSE) {
 }
 
 # Plot streamlines to compare with RH2003
-if (TRUE) {
+if (FALSE) {
 
     zlim = c(0,30)
     tmp = rh_stream 

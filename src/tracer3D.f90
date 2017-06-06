@@ -8,9 +8,6 @@ module tracer3D
 
     implicit none 
 
-    real(prec), parameter :: z_scale_in  = 1e0
-    real(prec), parameter :: z_scale_out = 1.0/z_scale_in
-
     type tracer_par_trans_class
         integer :: nt 
 
@@ -124,10 +121,6 @@ module tracer3D
     public :: tracer_init 
     public :: tracer_update 
     public :: tracer_end 
-
-    ! Conversion constants
-    public :: z_scale_in 
-    public :: z_scale_out 
 
 contains 
 
@@ -296,14 +289,6 @@ contains
         ny = size(y1,1)
         nz = size(z1,1)
 
-        ! Scale z-axis as desired (for numerics)
-        if (z_scale_in .ne. 1.0) then 
-            if (.not. trc%par%is_sigma) z1 = z1*z_scale_in 
-            z_srf1 = z_srf1*z_scale_in 
-            H1     = H1*z_scale_in
-            uz1    = uz1*z_scale_in 
-        end if 
-
         if (trim(trc%par%interp_method) .eq. "spline") then
 
             ! Allocate z-velocity field in sigma coordinates 
@@ -324,7 +309,7 @@ contains
 
         ! Interpolate to the get the right elevation and other deposition quantities
         do i = 1, trc%par%n 
-            
+
             if (trc%now%active(i) .eq. 2) then 
 
                 ! Temporarily store velocity of this time step (for accelaration calculation)
@@ -389,7 +374,7 @@ contains
         trc%now%dpth = max(trc%now%z_srf - trc%now%z, 0.0) 
 
         ! Destroy points that moved outside the valid region 
-        call tracer_deactivate(trc%par,trc%now,x1,y1,maxval(H1))
+        call tracer_deactivate(trc,x1,y1,maxval(H1))
 
         ! Activate new tracers if desired
         if (dep_now) call tracer_activate(trc%par,trc%now,x1,y1,H=H1,nmax=trc%par%n_max_dep)
@@ -404,7 +389,7 @@ contains
                 par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
 
                 ! Apply interpolation weights to variables
-                trc%now%dpth(i)  = 0.001*z_scale_in   ! Always deposit just below the surface (eg 1 mm) to avoid zero z-velocity
+                trc%now%dpth(i)  = 0.01   ! Always deposit just below the surface (eg 1 mm) to avoid zero z-velocity
                 trc%now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
                 trc%now%z(i)     = trc%now%z_srf(i)-trc%now%dpth(i)
                 
@@ -499,7 +484,7 @@ contains
             ! Proceed with activation, since points are available 
 
             ! Determine initial desired distribution of points on low resolution grid
-            p_init = gen_distribution(H,H_min=par%H_min_dep*z_scale_in,alpha=par%alpha,dist=par%weight)
+            p_init = gen_distribution(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%weight)
             p = p_init  
 
             ! Generate random numbers to populate points 
@@ -577,12 +562,11 @@ contains
 
     end subroutine tracer_activate 
 
-    subroutine tracer_deactivate(par,now,x,y,Hmax)
+    subroutine tracer_deactivate(trc,x,y,Hmax)
         ! Use this to deactivate individual or multiple tracers
         implicit none 
 
-        type(tracer_par_class),   intent(INOUT) :: par 
-        type(tracer_state_class), intent(INOUT) :: now 
+        type(tracer_class),   intent(INOUT) :: trc  
         real(prec), intent(IN) :: x(:), y(:) 
         real(prec), intent(IN) :: Hmax 
 
@@ -592,30 +576,36 @@ contains
         !  - Point is past maximum depth into the ice sheet 
         !  - Velocity of point is higher than maximum threshold 
         !  - x/y position is out of boundaries of the domain 
-        where (now%active .gt. 0 .and. &
-              ( now%H .lt. par%H_min*z_scale_in                .or. &
-                now%H .gt. Hmax                                .or. &
-                now%dpth/now%H .ge. par%depth_max              .or. &
-                sqrt(now%ux**2 + now%uy**2) .gt. par%U_max     .or. &
-                now%x .lt. minval(x) .or. now%x .gt. maxval(x) .or. &
-                now%y .lt. minval(y) .or. now%y .gt. maxval(y) ) ) 
+        where (trc%now%active .gt. 0 .and. &
+              ( trc%now%H .lt. trc%par%H_min                            .or. &
+                trc%now%H .gt. Hmax                                     .or. &
+                trc%now%dpth/trc%now%H .ge. trc%par%depth_max           .or. &
+                sqrt(trc%now%ux**2 + trc%now%uy**2) .gt. trc%par%U_max  .or. &
+                trc%now%x .lt. minval(x) .or. trc%now%x .gt. maxval(x)  .or. &
+                trc%now%y .lt. minval(y) .or. trc%now%y .gt. maxval(y) ) ) 
 
-            now%active    = 0 
+            trc%now%active    = 0 
 
-            now%id        = mv 
-            now%x         = mv 
-            now%y         = mv 
-            now%z         = mv 
-            now%sigma     = mv 
-            now%z_srf     = mv 
-            now%dpth      = mv 
-            now%ux        = mv 
-            now%uy        = mv 
-            now%uz        = mv 
-            now%thk       = mv 
-            now%T         = mv 
-            now%H         = mv 
+            trc%now%id        = mv 
+            trc%now%x         = mv 
+            trc%now%y         = mv 
+            trc%now%z         = mv 
+            trc%now%sigma     = mv 
+            trc%now%z_srf     = mv 
+            trc%now%dpth      = mv 
+            trc%now%ux        = mv 
+            trc%now%uy        = mv 
+            trc%now%uz        = mv 
+            trc%now%thk       = mv 
+            trc%now%T         = mv 
+            trc%now%H         = mv 
 
+            trc%dep%time      = mv 
+            trc%dep%H         = mv 
+            trc%dep%x         = mv 
+            trc%dep%y         = mv 
+            trc%dep%z         = mv 
+            
         end where 
 
         return 
@@ -745,12 +735,12 @@ contains
                 if (n_ind .gt. 0) then
                     write(*,*) "isochrones: ", i, j, q, n_ind 
  
-                    trc%stats%depth_iso(i,j,q)     = calc_mean(real(trc%now%dpth(inds)*z_scale_out,prec_wrt))
-                    trc%stats%depth_iso_err(i,j,q) = calc_sd(real(trc%now%dpth(inds)*z_scale_out,prec_wrt), &
+                    trc%stats%depth_iso(i,j,q)     = calc_mean(real(trc%now%dpth(inds),prec_wrt))
+                    trc%stats%depth_iso_err(i,j,q) = calc_sd(real(trc%now%dpth(inds),prec_wrt), &
                                                              trc%stats%depth_iso(i,j,q))
                     trc%stats%density_iso(i,j,q)   = n_ind 
 
-                    trc%stats%dep_z_iso(i,j,q)     = calc_mean(real(trc%dep%z(inds)*z_scale_out,prec_wrt))
+                    trc%stats%dep_z_iso(i,j,q)     = calc_mean(real(trc%dep%z(inds),prec_wrt))
                 else 
                     trc%stats%depth_iso(i,j,q)     = MV 
                     trc%stats%depth_iso_err(i,j,q) = MV
