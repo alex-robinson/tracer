@@ -14,7 +14,7 @@ module tracer2D
     public :: tracer2D_init 
     public :: tracer2D_update 
     public :: tracer2D_end 
-    
+
 contains
 
 
@@ -41,7 +41,9 @@ contains
     end subroutine tracer2D_init
 
 
-    subroutine tracer2D_update(trc,time,x,z,z_srf,H,ux,uz,dep_now,stats_now)
+    subroutine tracer2D_update(trc,time,x,z,z_srf,H,ux,uz, &
+                               lon,lat,t2m_ann,t2m_sum,pr_ann,pr_sum,d18O_ann, &
+                               dep_now,stats_now)
 
         implicit none 
 
@@ -50,12 +52,16 @@ contains
         real(prec), intent(IN) :: x(:), z(:)
         real(prec), intent(IN) :: z_srf(:), H(:)
         real(prec), intent(IN) :: ux(:,:), uz(:,:)
+        real(prec), intent(IN) :: lon(:), lat(:), t2m_ann(:), t2m_sum(:), pr_ann(:), pr_sum(:), d18O_ann(:)
         logical,    intent(IN) :: dep_now, stats_now 
 
         ! Local variables
-        real(prec) :: y(5) 
+        real(prec) :: y(2) 
         real(prec), allocatable :: z_srf_2D(:,:), H_2D(:,:)
         real(prec), allocatable :: ux_3D(:,:,:), uy_3D(:,:,:), uz_3D(:,:,:)
+        real(prec), allocatable :: lon_2D(:,:), lat_2D(:,:), t2m_ann_2D(:,:), t2m_sum_2D(:,:) 
+        real(prec), allocatable :: pr_ann_2D(:,:), pr_sum_2D(:,:), d18O_ann_2D(:,:)
+        
         integer :: j, ny 
 
         ny = size(y,1)
@@ -66,22 +72,40 @@ contains
         allocate(ux_3D(size(ux,1),ny,size(ux,2)))
         allocate(uy_3D(size(ux,1),ny,size(ux,2)))
         allocate(uz_3D(size(ux,1),ny,size(ux,2)))
-
+        allocate(lon_2D(size(x,1),ny))
+        allocate(lat_2D(size(x,1),ny))
+        allocate(t2m_ann_2D(size(x,1),ny))
+        allocate(t2m_sum_2D(size(x,1),ny))
+        allocate(pr_ann_2D(size(x,1),ny))
+        allocate(pr_sum_2D(size(x,1),ny))
+        allocate(d18O_ann_2D(size(x,1),ny))
+        
         ! Set y-dimension to one value of zero
-!         y(1:2) = [0.0,1.0] 
-        y(1:5) = [0.0,0.25,0.50,0.75,1.0] 
+        y(1:2) = [0.0,1.0] 
 
         ! Reshape input data with a ghost y-dimension of length two
         do j = 1, size(y)
-            z_srf_2D(:,j) = z_srf 
-            H_2D(:,j)     = H 
-            ux_3D(:,j,:)  = ux 
-            uy_3D         = 0.0 
-            uz_3D(:,j,:)  = uz 
+
+            z_srf_2D(:,j)    = z_srf 
+            H_2D(:,j)        = H 
+
+            ux_3D(:,j,:)     = ux 
+            uy_3D            = 0.0 
+            uz_3D(:,j,:)     = uz 
+
+            lon_2D(:,j)      = lon 
+            lat_2D(:,j)      = lat 
+            t2m_ann_2D(:,j)  = t2m_ann 
+            t2m_sum_2D(:,j)  = t2m_sum 
+            pr_ann_2D(:,j)   = pr_ann 
+            pr_sum_2D(:,j)   = pr_sum 
+            d18O_ann_2D(:,j) = d18O_ann 
+            
         end do 
 
         ! Now update tracers using 3D call 
         call tracer_update(trc,time,x,y,z,z_srf_2D,H_2D,ux_3D,uy_3D,uz_3D, &
+                            lon_2D,lat_2D,t2m_ann_2D,t2m_sum_2D,pr_ann_2D,pr_sum_2D,d18O_ann_2D, &
                             dep_now,stats_now,order="ijk")
 
         return 

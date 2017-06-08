@@ -84,11 +84,10 @@ module tracer3D
         real(prec), allocatable :: lon(:), lat(:) 
 
         ! Additional tracer deposition information (climate, isotopes, etc)
-        real(prec), allocatable :: t2m(:,:)     ! 4 seasons 
-        real(prec), allocatable :: pr(:,:)      ! 4 seasons 
+        real(prec), allocatable :: t2m_ann(:), t2m_sum(:)      
+        real(prec), allocatable :: pr_ann(:), pr_sum(:)     
         real(prec), allocatable :: t2m_prann(:) ! Precip-weighted temp
-
-!         real(prec), allocatable :: d18O(:)
+        real(prec), allocatable :: d18O_ann(:)
 !         real(prec), allocatable :: dD(:)
 
     end type 
@@ -199,7 +198,9 @@ contains
 
     end subroutine tracer_init
 
-    subroutine tracer_update(trc,time,x,y,z,z_srf,H,ux,uy,uz,dep_now,stats_now,order,sigma_srf)
+    subroutine tracer_update(trc,time,x,y,z,z_srf,H,ux,uy,uz,              &
+                             lon,lat,t2m_ann,t2m_sum,pr_ann,pr_sum,d18O_ann, &
+                             dep_now,stats_now,order,sigma_srf)
 
         implicit none 
 
@@ -208,6 +209,7 @@ contains
         real(prec), intent(IN) :: x(:), y(:), z(:)
         real(prec), intent(IN) :: z_srf(:,:), H(:,:)
         real(prec), intent(IN) :: ux(:,:,:), uy(:,:,:), uz(:,:,:)
+        real(prec), intent(IN) :: lon(:,:), lat(:,:), t2m_ann(:,:), t2m_sum(:,:), pr_ann(:,:), pr_sum(:,:), d18O_ann(:,:) 
         logical, intent(IN) :: dep_now, stats_now  
         character(len=*), intent(IN), optional :: order 
         real(prec), intent(IN), optional :: sigma_srf     ! Value at surface by default (1 or 0?)
@@ -221,6 +223,7 @@ contains
         real(prec), allocatable :: z_srf1(:,:), H1(:,:)
         real(prec), allocatable :: ux1(:,:,:), uy1(:,:,:), uz1(:,:,:)
         real(prec), allocatable :: usig1(:,:,:)
+        real(prec), allocatable :: lon1(:,:), lat1(:,:), t2m_ann1(:,:), t2m_sum1(:,:), pr_ann1(:,:), pr_sum1(:,:), d18O_ann1(:,:)
         real(prec) :: ux0, uy0, uz0 
         real(prec) :: dt 
 
@@ -284,6 +287,18 @@ contains
         call tracer_reshape3D_field(idx_order,uy,uy1,rev_z=rev_z)
         call tracer_reshape3D_field(idx_order,uz,uz1,rev_z=rev_z)
         
+        if (dep_now) then 
+            ! Also reshape deposition fields 
+            call tracer_reshape2D_field(idx_order,lon,lon1)
+            call tracer_reshape2D_field(idx_order,lat,lat1)
+            call tracer_reshape2D_field(idx_order,t2m_ann,t2m_ann1)
+            call tracer_reshape2D_field(idx_order,t2m_sum,t2m_sum1)
+            call tracer_reshape2D_field(idx_order,pr_ann,pr_ann1)
+            call tracer_reshape2D_field(idx_order,pr_sum,pr_sum1)
+            call tracer_reshape2D_field(idx_order,d18O_ann,d18O_ann1)
+            
+        end if 
+
         ! Get axis sizes (if ny==5, this is a 2D profile domain) 
         nx = size(x1,1)
         ny = size(y1,1)
@@ -377,7 +392,7 @@ contains
         call tracer_deactivate(trc,x1,y1,maxval(H1))
 
         ! Activate new tracers if desired
-        if (dep_now) call tracer_activate(trc%par,trc%now,x1,y1,H=H1,nmax=trc%par%n_max_dep)
+        if (dep_now) call tracer_activate(trc%par,trc%now,x1,y1,H=H1,ux_srf=ux1(:,:,nx),uy_srf=uy1(:,:,ny),nmax=trc%par%n_max_dep)
 
         ! Finish activation for necessary points 
         do i = 1, trc%par%n 
@@ -389,7 +404,7 @@ contains
                 par_lin = interp_bilinear_weights(x1,y1,xout=trc%now%x(i),yout=trc%now%y(i))
 
                 ! Apply interpolation weights to variables
-                trc%now%dpth(i)  = 0.01   ! Always deposit just below the surface (eg 1 mm) to avoid zero z-velocity
+                trc%now%dpth(i)  = 0.01   ! Always deposit just below the surface (eg 1 cm) to avoid zero z-velocity
                 trc%now%z_srf(i) = interp_bilinear(par_lin,z_srf1)
                 trc%now%z(i)     = trc%now%z_srf(i)-trc%now%dpth(i)
                 
@@ -412,6 +427,16 @@ contains
                 trc%dep%y(i)    = trc%now%y(i)
                 trc%dep%z(i)    = trc%now%z(i) 
 
+                trc%dep%lon(i)  = interp_bilinear(par_lin,lon1)
+                trc%dep%lat(i)  = interp_bilinear(par_lin,lat1)
+
+                trc%dep%t2m_ann(i)   = interp_bilinear(par_lin,t2m_ann1)
+                trc%dep%t2m_sum(i)   = interp_bilinear(par_lin,t2m_sum1)
+                trc%dep%pr_ann(i)    = interp_bilinear(par_lin,pr_ann1)
+                trc%dep%pr_sum(i)    = interp_bilinear(par_lin,pr_sum1)
+                trc%dep%t2m_prann(i) = MV
+                trc%dep%d18O_ann(i)  = MV
+
                 trc%now%active(i) = 2 
 
             end if 
@@ -425,6 +450,7 @@ contains
         !   it was just deposited, then in main program calling eg, tracer_add_dep_variable(trc,"T",T),
         !   where the argument "T" should match a list of available variables, and T should be the variable
         !   to be stored from the main program. 
+        !   Downside to above approach, is re-calculating the par_lin object every time. 
 
         ! Update summary statistics 
         trc%par%n_active = count(trc%now%active.gt.0)
@@ -457,7 +483,7 @@ contains
     !
     ! ================================================
     
-    subroutine tracer_activate(par,now,x,y,H,nmax)
+    subroutine tracer_activate(par,now,x,y,H,ux_srf,uy_srf,nmax)
         ! Use this to activate individual or multiple tracers (not more than nmax)
         ! Only determine x/y position here, later interpolate z_srf and deposition
         ! information 
@@ -467,7 +493,7 @@ contains
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
         real(prec), intent(IN) :: x(:), y(:)
-        real(prec), intent(IN) :: H(:,:)
+        real(prec), intent(IN) :: H(:,:), ux_srf(:,:), uy_srf(:,:) 
         integer, intent(IN) :: nmax  
 
         integer :: ntot  
@@ -484,7 +510,7 @@ contains
             ! Proceed with activation, since points are available 
 
             ! Determine initial desired distribution of points on low resolution grid
-            p_init = gen_distribution(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%weight)
+            p_init = gen_distribution_thickness(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%weight)
             p = p_init  
 
             ! Generate random numbers to populate points 
@@ -605,7 +631,7 @@ contains
             trc%dep%x         = mv 
             trc%dep%y         = mv 
             trc%dep%z         = mv 
-            
+
         end where 
 
         return 
@@ -640,7 +666,7 @@ contains
 
     end subroutine calc_position
 
-    function gen_distribution(H,H_min,alpha,dist) result(p)
+    function gen_distribution_thickness(H,H_min,alpha,dist) result(p)
 
         implicit none 
 
@@ -678,7 +704,43 @@ contains
 
         return 
 
-    end function gen_distribution
+    end function gen_distribution_thickness
+
+    function gen_distribution_direction(x,y,u,v,theta_max) result(p)
+
+        implicit none 
+
+        real(prec), intent(IN) :: x(:), y(:), u(:,:), v(:,:) 
+        real(prec), intent(IN) :: theta_max 
+        real(prec) :: p(size(u,1),size(u,2))
+
+        ! Local variables
+        integer    :: k, ij(2)
+        real(prec) :: p_sum 
+
+        p = 1.0 
+
+        ! Normalize probability sum to one 
+        p_sum = sum(p)
+        if (p_sum .gt. 0.0) p = p / p_sum
+
+        return 
+
+    end function gen_distribution_direction
+
+    elemental function calc_angle(x1,y1,x2,y2) result(theta)
+        ! Given a vector, calculate the angle wrt unit circle 
+
+        implicit none 
+
+        real(prec), intent(IN) :: x1, y1, x2, y2 
+        real(prec) :: theta 
+
+        theta = atan2((y2-y1),(x2-x1))
+
+        return 
+
+    end function calc_angle 
 
     subroutine calc_tracer_stats(trc,x,y,z,z_srf,H)
         ! Convert tracer information to isochrone format matching
@@ -1054,7 +1116,8 @@ contains
         
         allocate(dep%time(n), dep%H(n))
         allocate(dep%x(n), dep%y(n), dep%z(n), dep%lon(n), dep%lat(n))
-        allocate(dep%t2m(4,n), dep%pr(4,n), dep%t2m_prann(n))
+        allocate(dep%t2m_ann(n), dep%t2m_sum(n), dep%pr_ann(n), dep%pr_sum(n),dep%t2m_prann(n))
+        allocate(dep%d18O_ann(n))
         
         return
 
@@ -1093,9 +1156,12 @@ contains
         if (allocated(dep%y))         deallocate(dep%y)
         if (allocated(dep%lon))       deallocate(dep%lon)
         if (allocated(dep%lat))       deallocate(dep%lat)
-        if (allocated(dep%t2m))       deallocate(dep%t2m)
-        if (allocated(dep%pr))        deallocate(dep%pr)
+        if (allocated(dep%t2m_ann))   deallocate(dep%t2m_ann)
+        if (allocated(dep%t2m_sum))   deallocate(dep%t2m_sum)
+        if (allocated(dep%pr_ann))    deallocate(dep%pr_ann)
+        if (allocated(dep%pr_sum))    deallocate(dep%pr_sum)
         if (allocated(dep%t2m_prann)) deallocate(dep%t2m_prann)
+        if (allocated(dep%d18O_ann))  deallocate(dep%d18O_ann)
         
         return
 

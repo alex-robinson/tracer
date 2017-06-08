@@ -181,6 +181,75 @@ contains
 
     end subroutine tracer2D_write 
 
+    subroutine tracer_write_diagnostic_init(trc,time,fldr,filename)
+
+        implicit none 
+
+        type(tracer_class), intent(IN) :: trc 
+        real(prec_time) :: time
+        character(len=*), intent(IN)   :: fldr, filename 
+
+        ! Local variables 
+        integer :: nt 
+        character(len=512) :: path_out 
+
+        path_out = trim(fldr)//"/"//trim(filename)
+
+        ! Create output file 
+        call nc_create(path_out)
+        call nc_write_dim(path_out,"xc",        x=trc%stats%x*1e-3,     units="km")
+        call nc_write_dim(path_out,"yc",        x=trc%stats%y*1e-3,     units="km")
+        call nc_write_dim(path_out,"depth_norm",x=trc%stats%depth_norm, units="1")
+        call nc_write_dim(path_out,"age_iso",   x=trc%stats%age_iso,    units="ka")
+        call nc_write_dim(path_out,"time",      x=time,unlimited=.TRUE.,units="ka")
+        
+        return 
+
+    end subroutine tracer_write_diagnostic_init 
+
+    subroutine tracer_write_diagnostic_stats(trc,time,fldr,filename) !,z_srf,H)
+        ! Write various meta-tracer information (ie, lagrangian => eulerian)
+        implicit none 
+
+        type(tracer_class), intent(IN) :: trc 
+        real(prec_time) :: time
+        character(len=*),   intent(IN) :: fldr, filename 
+!         real(prec),         intent(IN) :: z_srf(:,:), H(:,:) 
+
+        ! Local variables 
+        character(len=512) :: path_out 
+        real(prec_wrt) :: mv_wrt 
+
+        path_out = trim(fldr)//"/"//trim(filename)
+
+        mv_wrt = MV 
+
+!         call nc_write(path_out,"z_srf",z_srf,dim1="xc",dim2="yc",missing_value=mv_wrt, &
+!                       units="m",long_name="Surface elevation")
+!         call nc_write(path_out,"H",H,dim1="xc",dim2="yc",missing_value=mv_wrt, &
+!                       units="m",long_name="Ice thickness")
+
+        call nc_write(path_out,"ice_age",trc%stats%ice_age,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=mv_wrt, &
+                      units="ka",long_name="Layer age")
+        call nc_write(path_out,"ice_age_err",trc%stats%ice_age_err,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=mv_wrt, &
+                      units="ka",long_name="Layer age - error")
+        call nc_write(path_out,"density",trc%stats%density,dim1="xc",dim2="yc",dim3="depth_norm",missing_value=int(mv_wrt), &
+                      units="1",long_name="Tracer density")
+
+        call nc_write(path_out,"depth_iso",trc%stats%depth_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=mv_wrt, &
+                      units="m",long_name="Isochrone depth")
+        call nc_write(path_out,"depth_iso_err",trc%stats%depth_iso_err,dim1="xc",dim2="yc",dim3="age_iso",missing_value=mv_wrt, &
+                      units="m",long_name="Isochrone depth - error")
+        call nc_write(path_out,"dep_z_iso",trc%stats%dep_z_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=mv_wrt, &
+                      units="m",long_name="Isochrone deposition elevation")
+        call nc_write(path_out,"density_iso",trc%stats%density_iso,dim1="xc",dim2="yc",dim3="age_iso",missing_value=int(mv_wrt), &
+                      units="1",long_name="Tracer density (for isochrones)")
+
+        
+        return 
+
+    end subroutine tracer_write_diagnostic_stats
+    
     subroutine tracer_write_stats(trc,time,fldr,filename) !,z_srf,H)
         ! Write various meta-tracer information (ie, lagrangian => eulerian)
         ! This output belongs to a specific time slice, usually at time = 0 ka BP. 
