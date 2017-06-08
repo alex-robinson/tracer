@@ -299,7 +299,7 @@ contains
             
         end if 
 
-        ! Get axis sizes (if ny==5, this is a 2D profile domain) 
+        ! Get axis sizes (if ny==2, this is a 2D profile domain) 
         nx = size(x1,1)
         ny = size(y1,1)
         nz = size(z1,1)
@@ -392,7 +392,8 @@ contains
         call tracer_deactivate(trc,x1,y1,maxval(H1))
 
         ! Activate new tracers if desired
-        if (dep_now) call tracer_activate(trc%par,trc%now,x1,y1,H=H1,ux_srf=ux1(:,:,nx),uy_srf=uy1(:,:,ny),nmax=trc%par%n_max_dep)
+        if (dep_now) call tracer_activate(trc%par,trc%now,x1,y1,H=H1,lat=lat1, &
+                                ux_srf=ux1(:,:,nx),uy_srf=uy1(:,:,ny),nmax=trc%par%n_max_dep)
 
         ! Finish activation for necessary points 
         do i = 1, trc%par%n 
@@ -483,7 +484,7 @@ contains
     !
     ! ================================================
     
-    subroutine tracer_activate(par,now,x,y,H,ux_srf,uy_srf,nmax)
+    subroutine tracer_activate(par,now,x,y,H,lat,ux_srf,uy_srf,nmax)
         ! Use this to activate individual or multiple tracers (not more than nmax)
         ! Only determine x/y position here, later interpolate z_srf and deposition
         ! information 
@@ -493,7 +494,7 @@ contains
         type(tracer_par_class),   intent(INOUT) :: par 
         type(tracer_state_class), intent(INOUT) :: now 
         real(prec), intent(IN) :: x(:), y(:)
-        real(prec), intent(IN) :: H(:,:), ux_srf(:,:), uy_srf(:,:) 
+        real(prec), intent(IN) :: H(:,:), lat(:,:), ux_srf(:,:), uy_srf(:,:) 
         integer, intent(IN) :: nmax  
 
         integer :: ntot  
@@ -511,7 +512,14 @@ contains
 
             ! Determine initial desired distribution of points on low resolution grid
             p_init = gen_distribution_thickness(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%weight)
-            p = p_init  
+            
+            ! Additionally adjust distribution according to latitude 
+            where (lat .lt. 70.0) 
+                p_init = 0.0 
+            end where 
+
+            ! Normalize p_init, just in case
+            p_init = p_init / sum(p_init)
 
             ! Generate random numbers to populate points 
             allocate(jit(2,ntot))
@@ -546,6 +554,7 @@ contains
                 ! This if-statement ensures some valid points currently exist in the domain
                 
                 k = 0 
+                p = p_init   ! Set probability distribution to initial distribution 
 
                 do j = 1, par%n 
 
