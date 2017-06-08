@@ -10,6 +10,7 @@
     depth_max = 0.99            ! fraction of thickness
     U_max     = 200.0           ! m/a 
     
+    U_max_dep =  40.0           ! m/a 
     H_min_dep = 3595.0          ! m 
     alpha     = 1.0 
     dist      = "linear"

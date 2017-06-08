@@ -27,6 +27,7 @@ module tracer3D
         real(prec) :: H_min                     ! Minimum ice thickness to track (m)
         real(prec) :: depth_max                 ! Maximum depth of tracer (fraction)
         real(prec) :: U_max                     ! Maximum horizontal velocity of tracer to track (m/a)
+        real(prec) :: U_max_dep                 ! Maximum horizontal velocity allowed for tracer deposition (m/a)
         real(prec) :: H_min_dep                 ! Minimum ice thickness for tracer deposition (m)
         real(prec) :: alpha                     ! Slope of probability function
         character(len=56) :: weight             ! Weighting function for generating prob. distribution
@@ -511,12 +512,13 @@ contains
             ! Proceed with activation, since points are available 
 
             ! Determine initial desired distribution of points on low resolution grid
-            p_init = gen_distribution_thickness(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%weight)
-            
-            ! Additionally adjust distribution according to latitude 
-            where (lat .lt. 70.0) 
-                p_init = 0.0 
-            end where 
+!             p_init = gen_distribution_thickness(H,H_min=par%H_min_dep,alpha=par%alpha,dist=par%weight)
+            p_init = gen_distribution_vel(uv=sqrt(ux_srf**2+uy_srf**2),H=H,uv_max=par%U_max_dep,H_min=par%H_min_dep)
+
+!             ! Additionally adjust distribution according to latitude 
+!             where (lat .lt. 70.0) 
+!                 p_init = 0.0 
+!             end where 
 
             ! Normalize p_init, just in case
             p_init = p_init / sum(p_init)
@@ -674,6 +676,31 @@ contains
         return 
 
     end subroutine calc_position
+
+    function gen_distribution_vel(uv,H,uv_max,H_min) result(p)
+
+        implicit none 
+
+        real(prec), intent(IN) :: uv(:,:), H(:,:)
+        real(prec), intent(IN) :: uv_max, H_min 
+        real(prec) :: p(size(H,1),size(H,2))
+
+        ! Local variables
+        real(prec) :: p_sum 
+
+        
+        p = 0.0 
+        where (uv .gt. 0.0 .and. uv .lt. uv_max .and. H .gt. H_min)
+            p = 1.0 - uv/uv_max 
+        end where 
+
+        ! Normalize probability sum to one 
+        p_sum = sum(p)
+        if (p_sum .gt. 0.0) p = p / p_sum
+
+        return 
+
+    end function gen_distribution_vel
 
     function gen_distribution_thickness(H,H_min,alpha,dist) result(p)
 
@@ -939,6 +966,7 @@ contains
         call nml_read(filename,"tracer_par","H_min",         par%H_min)
         call nml_read(filename,"tracer_par","depth_max",     par%depth_max)
         call nml_read(filename,"tracer_par","U_max",         par%U_max)
+        call nml_read(filename,"tracer_par","U_max_dep",     par%U_max_dep)
         call nml_read(filename,"tracer_par","H_min_dep",     par%H_min_dep)
         call nml_read(filename,"tracer_par","alpha",         par%alpha)
         call nml_read(filename,"tracer_par","weight",        par%weight)
